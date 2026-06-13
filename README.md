@@ -1,48 +1,60 @@
-# 💳 TF CARD — aplikacja bankowa
+# 💳 TF CARD — bankowość mobilna (PWA)
 
-Lekka, mobilna aplikacja bankowa (PWA-style) zbudowana w czystym HTML/CSS/JS.
-Bez backendu — wszystkie dane przechowywane są lokalnie w `localStorage`
-przeglądarki (demo / symulacja).
+Mobilna aplikacja bankowa w stylu Revolut. PWA instalowalna na ekran
+początkowy iPhone/Androida, logowanie **kodem PIN**, panel administratora,
+płatności **TF PAY** i subskrypcje **TF CARD PLUS / PRO**.
+Dane synchronizują się między telefonami przez **Firebase**.
 
 ## ✨ Funkcje
 
-- **Logowanie i rejestracja** użytkowników
-- **TF PAY ⚡** — przelewy między kontami TF CARD oraz doładowania konta
-- **Karty 💳** — wirtualna karta z numerem, generowanie nowego numeru
-- **Subskrypcje ⭐**
-  - `TF CARD` (STANDARD) — darmowy
-  - `TF CARD PLUS` — 14,99 zł/mc (cashback 2%, wyższe limity)
-  - `TF CARD PRO` — 39,99 zł/mc (cashback 5%, karta metalowa, doradca 24/7)
-- **Panel administratora 🛡️** — zarządzanie użytkownikami: uznawanie/obciążanie
-  sald, zmiana planu, usuwanie kont, statystyki
+- **Logowanie PIN-em** — klawiatura numeryczna (jak w prawdziwym banku)
+- **Panel administratora** — ukryty: dotknij napisu **„TF CARD"** na ekranie
+  logowania, potem wpisz PIN admina. Sterujesz wszystkimi kontami:
+  uznawanie/obciążanie sald, zmiana planu, PIN-u, imienia, podgląd i usuwanie
+- **TF PAY ⚡** — przelewy między kontami TF CARD
+- **Karty 💳** — wirtualna karta, generowanie numeru
+- **Subskrypcje ⭐** — `TF CARD` (free), `TF CARD PLUS` (14,99 zł/mc),
+  `TF CARD PRO` (39,99 zł/mc); opłata pobierana z salda
+- **PWA** — działa offline, instaluje się na ekran początkowy (iPhone/Android)
+- **Brak startowej kasy** — nowe konta mają saldo 0 zł; pieniądze dodaje admin
 
-## 🔑 Konta testowe
+## 🔑 Dane startowe
 
-| Rola  | Login           | Hasło      |
-|-------|-----------------|------------|
-| Admin | `admin`         | `admin123` |
-| User  | `jan.kowalski`  | `demo`     |
+| Konto | PIN | Jak |
+|-------|-----|-----|
+| Użytkownik **Karol** | `1234` | wpisz PIN na ekranie logowania |
+| **Administrator** | `0000` | dotknij napisu „TF CARD", potem wpisz PIN |
 
-## 🚀 Uruchomienie lokalne
+> PIN-y zmienisz w panelu admina (również PIN administratora).
 
-Wystarczy otworzyć `index.html` w przeglądarce, lub:
+## ☁️ Konfiguracja Firebase (sync na wielu telefonach)
 
-```bash
-python3 -m http.server 8000
-# następnie otwórz http://localhost:8000
-```
+Bez tego aplikacja działa lokalnie (tylko jeden telefon). Aby włączyć sync:
+
+1. Wejdź na <https://console.firebase.google.com> → **Dodaj projekt**.
+2. **Build → Realtime Database → Utwórz bazę danych** (lokalizacja
+   `europe-west1`, tryb testowy na start).
+3. **Project settings ⚙️ → Twoje aplikacje → Web (`</>`)** → zarejestruj
+   i skopiuj `firebaseConfig`.
+4. Wklej wartości do pliku [`firebase-config.js`](firebase-config.js)
+   (najważniejszy `databaseURL`), zacommituj i wypchnij.
+
+## 📱 Instalacja na iPhone
+
+Otwórz stronę w Safari → **Udostępnij ⬆️** → **„Do ekranu początkowego"** →
+**Dodaj**. Aplikacja pojawi się jak natywna (pełny ekran, ikona TF).
 
 ## 🌐 GitHub Pages
 
-Aplikacja wdrażana jest automatycznie przez GitHub Actions
-(`.github/workflows/deploy.yml`) przy każdym pushu.
+Wdrożenie automatyczne przez GitHub Actions
+([`.github/workflows/deploy.yml`](.github/workflows/deploy.yml)) przy każdym
+pushu. Aktywacja: **Settings → Pages → Source: GitHub Actions**.
+Adres: `https://<użytkownik>.github.io/TFcard/`.
 
-**Aby aktywować Pages:** w repozytorium wejdź w
-`Settings → Pages → Build and deployment → Source: GitHub Actions`.
+## 🧱 Stos
 
-Po wdrożeniu strona dostępna jest pod adresem:
-`https://<użytkownik>.github.io/tfcard/`
+Czysty HTML/CSS/JS (bez frameworków) + Firebase Realtime Database.
+Brak kroku budowania — pliki statyczne.
 
-> ⚠️ To projekt demonstracyjny — nie używaj prawdziwych danych. Hasła
-> przechowywane są jawnie w `localStorage`, co jest niedopuszczalne w
-> produkcji.
+> ⚠️ Projekt demonstracyjny. PIN-y przechowywane są jawnie w bazie — nie
+> używaj prawdziwych danych ani pieniędzy.
