@@ -302,15 +302,19 @@ function wireCards(u) {
   });
 }
 
-/* ---------- Plany / subskrypcje ---------- */
-function planCardHTML(plan, currentId) {
-  const isActive = plan.id === currentId;
+/* ---------- Plany / subskrypcje (nadawane przez admina, ulepszane na prośbę) ---------- */
+const PLAN_RANK = { standard: 0, plus: 1, pro: 2 };
+
+function planCardHTML(plan, u) {
+  const isActive = plan.id === u.plan;
+  const requested = (u.requestedPlan || '') === plan.id;
+  const isUpgrade = PLAN_RANK[plan.id] > PLAN_RANK[u.plan];
   const badge = plan.id === 'pro' ? '<span class="badge gold">NAJLEPSZY</span>'
     : plan.id === 'plus' ? '<span class="badge cyan">POPULARNY</span>' : '';
   let action;
   if (isActive) action = `<button class="btn btn-good btn-block" disabled>Aktywny plan ✓</button>`;
-  else if (plan.id === 'standard') action = `<button class="btn btn-ghost btn-block" data-sub="standard">Przejdź na STANDARD</button>`;
-  else action = `<button class="btn btn-primary btn-block" data-sub="${plan.id}">Subskrybuj • ${fmt(plan.price)}/mc</button>`;
+  else if (requested) action = `<button class="btn btn-ghost btn-block" disabled>Prośba wysłana ⏳</button>`;
+  else action = `<button class="btn btn-primary btn-block" data-req="${plan.id}">${isUpgrade ? 'Poproś o ulepszenie' : 'Poproś o ten plan'}</button>`;
   return `
     <div class="plan ${plan.color}">
       <div class="plan-head">
@@ -323,28 +327,36 @@ function planCardHTML(plan, currentId) {
 }
 
 function viewSubs(u) {
+  const reqPlan = u.requestedPlan ? PLANS[u.requestedPlan] : null;
+  const banner = reqPlan ? `
+    <div class="card" style="border-color:var(--gold);margin-bottom:14px">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px">
+        <div>⏳ Wysłałeś prośbę o <b>${esc(reqPlan.name)}</b>.<div class="muted" style="font-size:12px;margin-top:2px">Administrator ją zatwierdzi.</div></div>
+        <button class="btn btn-ghost btn-sm" id="cancel-req">Anuluj</button>
+      </div>
+    </div>` : '';
   return `
     <div class="greeting">Plany ⭐</div>
-    <div class="greeting-sub">Aktualnie: <b>${esc((PLANS[u.plan] || PLANS.standard).name)}</b> • Saldo: ${fmt(u.balance)}</div>
-    ${planCardHTML(PLANS.pro, u.plan)}
-    ${planCardHTML(PLANS.plus, u.plan)}
-    ${planCardHTML(PLANS.standard, u.plan)}
-    <p class="center muted" style="font-size:12px;margin-top:6px">Opłata pobierana jednorazowo z salda przy aktywacji (symulacja miesięcznej subskrypcji).</p>`;
+    <div class="greeting-sub">Aktualnie: <b>${esc((PLANS[u.plan] || PLANS.standard).name)}</b></div>
+    ${banner}
+    ${planCardHTML(PLANS.pro, u)}
+    ${planCardHTML(PLANS.plus, u)}
+    ${planCardHTML(PLANS.standard, u)}
+    <p class="center muted" style="font-size:12px;margin-top:6px">Subskrypcje aktywuje administrator. Wyślij prośbę — pojawi się w panelu admina.</p>`;
 }
 
 function wireSubs(u) {
-  document.querySelectorAll('[data-sub]').forEach(b => b.addEventListener('click', async () => {
-    const plan = PLANS[b.dataset.sub];
+  document.querySelectorAll('[data-req]').forEach(b => b.addEventListener('click', async () => {
+    const plan = PLANS[b.dataset.req];
     if (!plan || u.plan === plan.id) return;
-    if (plan.price > 0) {
-      if (u.balance < plan.price) return toast('Za mało środków na opłatę', 'bad');
-      await Store.updateUser(u.id, { balance: u.balance - plan.price, plan: plan.id });
-      await Store.pushTx(u.id, mkTx('out', `Subskrypcja ${plan.name}`, plan.price));
-    } else {
-      await Store.updateUser(u.id, { plan: plan.id });
-    }
-    toast(`Aktywowano ${plan.name} 🎉`, 'good'); render();
+    await Store.updateUser(u.id, { requestedPlan: plan.id });
+    toast(`Wysłano prośbę o ${plan.name}`, 'good'); render();
   }));
+  const cancel = document.getElementById('cancel-req');
+  if (cancel) cancel.addEventListener('click', async () => {
+    await Store.updateUser(u.id, { requestedPlan: '' });
+    toast('Anulowano prośbę'); render();
+  });
 }
 
 /* =========================================================================
@@ -372,6 +384,11 @@ function renderAdmin() {
           <div class="admin-user-meta">${esc(u.cardNumber)}</div>
         </div>
       </div>
+      ${u.requestedPlan ? `<div class="admin-actions" style="background:rgba(244,196,90,.1);border:1px solid var(--gold);border-radius:12px;padding:10px;margin-top:12px">
+        <span>⬆️ Prośba o <b>${(PLANS[u.requestedPlan] || {}).tier || u.requestedPlan}</b></span>
+        <button class="btn btn-good btn-sm" data-adm="grant">Nadaj</button>
+        <button class="btn btn-ghost btn-sm" data-adm="reject">Odrzuć</button>
+      </div>` : ''}
       <div class="admin-actions">
         <input type="number" class="adm-amt" placeholder="Kwota" style="max-width:100px" />
         <button class="btn btn-good btn-sm" data-adm="credit">Uznaj</button>
@@ -470,8 +487,15 @@ function wireAdmin() {
         toast(`Obciążono ${u.name} o ${fmt(amt)}`, 'good');
       }
     } else if (action === 'plan') {
-      await Store.updateUser(u.id, { plan: wrap.querySelector('.adm-plan').value });
+      await Store.updateUser(u.id, { plan: wrap.querySelector('.adm-plan').value, requestedPlan: '' });
       toast(`Zmieniono plan: ${u.name}`, 'good');
+    } else if (action === 'grant') {
+      const plan = PLANS[u.requestedPlan];
+      await Store.updateUser(u.id, { plan: u.requestedPlan, requestedPlan: '' });
+      toast(`Nadano ${plan ? plan.name : 'plan'}: ${u.name}`, 'good');
+    } else if (action === 'reject') {
+      await Store.updateUser(u.id, { requestedPlan: '' });
+      toast(`Odrzucono prośbę: ${u.name}`);
     } else if (action === 'setpin') {
       const pin = wrap.querySelector('.adm-pin').value.trim();
       if (!/^\d{4}$/.test(pin)) return toast('PIN to 4 cyfry', 'bad');
@@ -500,11 +524,27 @@ function wireAdmin() {
    PWA — service worker + instalacja na iPhone
    ========================================================================= */
 function registerSW() {
-  if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
-      navigator.serviceWorker.register('sw.js').catch(() => {});
+  if (!('serviceWorker' in navigator)) return;
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').then((reg) => {
+      // Sprawdzaj aktualizacje przy każdym wejściu — aplikacja jest „ulepszalna"
+      reg.update();
+      reg.addEventListener('updatefound', () => {
+        const sw = reg.installing;
+        if (!sw) return;
+        sw.addEventListener('statechange', () => {
+          if (sw.state === 'installed' && navigator.serviceWorker.controller) {
+            sw.postMessage('skip-waiting');
+            toast('Dostępna nowa wersja — aktualizuję…');
+          }
+        });
+      });
+    }).catch(() => {});
+    let refreshed = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (refreshed) return; refreshed = true; window.location.reload();
     });
-  }
+  });
 }
 
 function isStandalone() {

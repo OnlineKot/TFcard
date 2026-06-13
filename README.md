@@ -14,7 +14,10 @@ Dane synchronizują się między telefonami przez **Firebase**.
 - **TF PAY ⚡** — przelewy między kontami TF CARD
 - **Karty 💳** — wirtualna karta, generowanie numeru
 - **Subskrypcje ⭐** — `TF CARD` (free), `TF CARD PLUS` (14,99 zł/mc),
-  `TF CARD PRO` (39,99 zł/mc); opłata pobierana z salda
+  `TF CARD PRO` (39,99 zł/mc). **Nadaje je administrator** — użytkownik wysyła
+  prośbę o ulepszenie, admin zatwierdza jednym kliknięciem
+- **Ulepszalna** — nowe wersje aplikacji wdrażają się i aktualizują
+  automatycznie (service worker z auto-update)
 - **PWA** — działa offline, instaluje się na ekran początkowy (iPhone/Android)
 - **Brak startowej kasy** — nowe konta mają saldo 0 zł; pieniądze dodaje admin
 

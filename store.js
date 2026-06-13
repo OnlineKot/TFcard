@@ -24,7 +24,7 @@ function seedState() {
   return {
     users: {
       [id]: {
-        id, name: 'Karol', pin: '1234', balance: 0, plan: 'standard',
+        id, name: 'Karol', pin: '1234', balance: 0, plan: 'standard', requestedPlan: '',
         cardNumber: genCard(), createdAt: Date.now(), transactions: {},
       },
     },
@@ -122,7 +122,7 @@ const Store = {
   newUser({ name, pin }) {
     const id = uid('u');
     return {
-      id, name, pin, balance: 0, plan: 'standard',
+      id, name, pin, balance: 0, plan: 'standard', requestedPlan: '',
       cardNumber: genCard(), createdAt: Date.now(), transactions: {},
     };
   },
