@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="theme-color" content="#0b0f1a" />
+  <title>TF CARD — Bankowość mobilna</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💳</text></svg>" />
+</head>
+<body>
+  <!-- ============ AUTH ============ -->
+  <div id="auth-screen" class="screen auth-screen">
+    <div class="auth-card">
+      <div class="brand">
+        <div class="brand-logo">TF</div>
+        <div class="brand-name">TF CARD</div>
+        <div class="brand-tag">Twój bank w kieszeni</div>
+      </div>
+
+      <div class="auth-tabs">
+        <button class="auth-tab active" data-tab="login">Logowanie</button>
+        <button class="auth-tab" data-tab="register">Rejestracja</button>
+      </div>
+
+      <form id="login-form" class="auth-form">
+        <label>Login lub e-mail</label>
+        <input type="text" id="login-username" autocomplete="username" placeholder="np. jan.kowalski" required />
+        <label>Hasło</label>
+        <input type="password" id="login-password" autocomplete="current-password" placeholder="••••••••" required />
+        <button type="submit" class="btn btn-primary btn-block">Zaloguj się</button>
+        <p class="auth-hint">Konto admina: <b>admin</b> / <b>admin123</b></p>
+      </form>
+
+      <form id="register-form" class="auth-form hidden">
+        <label>Imię i nazwisko</label>
+        <input type="text" id="reg-fullname" placeholder="Jan Kowalski" required />
+        <label>Login</label>
+        <input type="text" id="reg-username" placeholder="jan.kowalski" required />
+        <label>E-mail</label>
+        <input type="email" id="reg-email" placeholder="jan@example.com" required />
+        <label>Hasło</label>
+        <input type="password" id="reg-password" placeholder="min. 4 znaki" required />
+        <button type="submit" class="btn btn-primary btn-block">Załóż konto</button>
+      </form>
+
+      <div id="auth-error" class="auth-error"></div>
+    </div>
+    <div class="auth-footer">TF CARD • TF PAY • bezpieczne płatności</div>
+  </div>
+
+  <!-- ============ APP ============ -->
+  <div id="app-screen" class="screen hidden">
+    <header class="topbar">
+      <div class="topbar-left">
+        <div class="brand-logo small">TF</div>
+        <span class="topbar-title">TF CARD</span>
+      </div>
+      <div class="topbar-right">
+        <span id="user-badge" class="user-badge"></span>
+        <button id="logout-btn" class="icon-btn" title="Wyloguj">⎋</button>
+      </div>
+    </header>
+
+    <main id="view-container" class="view-container"></main>
+
+    <nav class="bottom-nav" id="bottom-nav">
+      <button class="nav-item active" data-view="home"><span class="nav-ico">🏠</span><span>Pulpit</span></button>
+      <button class="nav-item" data-view="pay"><span class="nav-ico">⚡</span><span>TF PAY</span></button>
+      <button class="nav-item" data-view="cards"><span class="nav-ico">💳</span><span>Karty</span></button>
+      <button class="nav-item" data-view="subs"><span class="nav-ico">⭐</span><span>Subskrypcje</span></button>
+      <button class="nav-item" data-view="admin" id="nav-admin" style="display:none"><span class="nav-ico">🛡️</span><span>Admin</span></button>
+    </nav>
+  </div>
+
+  <!-- ============ TOAST ============ -->
+  <div id="toast" class="toast"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
