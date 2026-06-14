@@ -1,0 +1,22 @@
+rules_version = '2';
+
+// Reguły bezpieczeństwa TF CARD.
+// Skopiuj do: Firebase → Firestore Database → Rules → Opublikuj.
+// Wymagają zalogowania (anonimowego) — aplikacja loguje użytkownika
+// automatycznie. Trzeba włączyć: Authentication → Sign-in method →
+// Anonymous → Enable.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Cały stan aplikacji trzymany jest w dokumencie tfcard/state.
+    match /tfcard/{docId} {
+      // Tylko zalogowani (token anonimowy z aplikacji) mogą czytać/pisać.
+      allow read, write: if request.auth != null;
+    }
+
+    // Wszystko inne — zablokowane.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

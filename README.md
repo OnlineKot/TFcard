@@ -22,14 +22,16 @@ Dane synchronizują się między telefonami przez **Firebase**.
 - **PWA** — działa offline, instaluje się na ekran początkowy (iPhone/Android)
 - **Brak startowej kasy** — nowe konta mają saldo 0 zł; pieniądze dodaje admin
 
-## 🔑 Dane startowe
+## 🔑 Logowanie
 
 | Konto | PIN | Jak |
 |-------|-----|-----|
-| Użytkownik **Karol** | `1234` | wpisz PIN na ekranie logowania |
-| **Administrator** | `0000` | dotknij napisu „TF CARD", potem wpisz PIN |
+| **Administrator** | `951852` | dotknij napisu „TF CARD", potem wpisz PIN |
+| Użytkownicy | — | zakłada je admin w **Kreatorze kont** (PIN 4–8 cyfr) |
 
-> PIN-y zmienisz w panelu admina (również PIN administratora).
+Na start nie ma żadnych kont użytkowników — zaloguj się jako admin i utwórz je
+w **Kreatorze kont** (imię, PIN, saldo startowe, subskrypcje PLUS/PRO).
+PIN-y i PIN administratora zmienisz w panelu admina.
 
 ## ☁️ Firebase (sync na wielu telefonach)
 
@@ -42,6 +44,25 @@ Firestore** (jeśli jeszcze nie istnieje):
    (np. `eur3`) → **tryb testowy** (na start, do testów).
 
 Bez utworzonej bazy aplikacja działa lokalnie (localStorage, jeden telefon).
+
+## 🔐 Bezpieczeństwo
+
+- **Logowanie anonimowe (Firebase Auth)** — aplikacja loguje każde urządzenie
+  anonimowo, a reguły Firestore wpuszczają tylko zalogowanych. Włącz w konsoli:
+  **Authentication → Sign-in method → Anonymous → Włącz**.
+- **Reguły Firestore** — skopiuj zawartość [`firestore.rules`](firestore.rules)
+  do **Firestore Database → Rules → Opublikuj** (zastępują otwarty tryb testowy).
+- PIN-y i PIN administratora (domyślnie `951852`) zmienisz w panelu admina.
+
+> Uwaga: to aplikacja kliencka — pełne bezpieczeństwo danych wymagałoby
+> backendu/Cloud Functions. Reguły + auth podnoszą poprzeczkę, ale nie używaj
+> prawdziwych danych ani pieniędzy.
+
+## 📊 Śledzenie (Firebase Analytics)
+
+Włączone (`measurementId` z configu). Logowane zdarzenia:
+`app_open`, `login`, `transfer`, `sub_request`, `sub_grant`, `account_create`.
+Podgląd: **Firebase → Analytics → DebugView / Events**.
 
 ## 📱 Instalacja na iPhone
 

@@ -11,7 +11,7 @@
    ========================================================================= */
 'use strict';
 
-const LOCAL_KEY = 'tfcard_state_v3';
+const LOCAL_KEY = 'tfcard_state_v4';
 
 function uid(p) { return p + '-' + Math.random().toString(36).slice(2, 10); }
 function genCard() {
@@ -19,19 +19,17 @@ function genCard() {
   return `4921 ${part()} ${part()} ${part()}`;
 }
 
-function blankUser(name, pin) {
+function blankUser(name, pin, opts = {}) {
   return {
-    id: uid('u'), name, pin, balance: 0,
-    subs: { plus: false, pro: false },
-    req: { plus: false, pro: false },
+    id: uid('u'), name, pin, balance: Number(opts.balance) || 0,
+    subs: { plus: !!opts.plus, pro: !!opts.pro },
     cardNumber: genCard(), createdAt: Date.now(), transactions: {},
   };
 }
 
-/* Dane startowe: użytkownik Karol (bez kasy, bez subskrypcji) + PIN admina. */
+/* Dane startowe: brak kont użytkowników (admin zakłada je kreatorem) + PIN admina. */
 function seedState() {
-  const karol = blankUser('Karol', '1234');
-  return { users: { [karol.id]: karol }, meta: { adminPin: '0000' } };
+  return { users: {}, meta: { adminPin: '951852' } };
 }
 
 function configReady(cfg) {
@@ -50,6 +48,11 @@ const Store = {
     if (configReady(cfg) && window.firebase && firebase.firestore) {
       try {
         if (!firebase.apps.length) firebase.initializeApp(cfg);
+        // Bezpieczeństwo: logowanie anonimowe — reguły Firestore wymagają auth
+        if (firebase.auth) {
+          try { await firebase.auth().signInAnonymously(); }
+          catch (e) { console.warn('Anonimowe logowanie nieudane (włącz Anonymous w konsoli):', e); }
+        }
         this._db = firebase.firestore();
         this._docRef = this._db.collection('tfcard').doc('state');
         const snap = await this._docRef.get();
@@ -82,9 +85,15 @@ const Store = {
   users() { return Object.values(this._state.users || {}); },
   meta() { return this._state.meta || {}; },
 
-  _commitLocal() { localStorage.setItem(LOCAL_KEY, JSON.stringify(this._state)); this._emit(); },
+  _commitLocal() {
+    try { localStorage.setItem(LOCAL_KEY, JSON.stringify(this._state)); } catch (e) { console.warn('Zapis lokalny nieudany:', e); }
+    this._emit();
+  },
   _commit() {
-    if (this.backend === 'firebase') return this._docRef.set(this._state);
+    if (this.backend === 'firebase') {
+      // Stabilność: błąd zapisu nie wywala aplikacji; snapshot skoryguje stan
+      return this._docRef.set(this._state).catch((e) => { console.warn('Zapis do chmury nieudany:', e); });
+    }
     this._commitLocal();
     return Promise.resolve();
   },
@@ -101,7 +110,7 @@ const Store = {
     return this._commit();
   },
 
-  newUser({ name, pin }) { return blankUser(name, pin); },
+  newUser(opts) { return blankUser(opts.name, opts.pin, opts); },
   newCard: genCard,
 };
 

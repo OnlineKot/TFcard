@@ -28,9 +28,7 @@
         <div id="lock-sub" class="lock-sub">Wpisz kod PIN</div>
       </div>
 
-      <div id="pin-dots" class="pin-dots">
-        <span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="dot"></span>
-      </div>
+      <div id="pin-dots" class="pin-dots"></div>
       <div id="pin-error" class="pin-error"></div>
 
       <div class="keypad" id="keypad">
@@ -85,9 +83,11 @@
 
   <div id="toast" class="toast"></div>
 
-  <!-- Firebase SDK (Firestore — sync na wielu telefonach) -->
+  <!-- Firebase SDK (Firestore + Auth + Analytics) -->
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-analytics-compat.js"></script>
   <script src="firebase-config.js"></script>
   <script src="store.js"></script>
   <script src="app.js"></script>
