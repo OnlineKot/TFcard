@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no" />
   <meta name="theme-color" content="#000000" />
-  <title>TF Vending</title>
+  <title>TF Sprzedawca</title>
   <link rel="apple-touch-icon" href="../apple-touch-icon.png" />
   <link rel="stylesheet" href="../styles.css" />
   <style>
@@ -12,17 +12,22 @@
     .vend-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
     .vend-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-top: 8px; }
     @media (min-width: 560px) { .vend-grid { grid-template-columns: repeat(3, 1fr); } }
-    .prod { background: var(--card); border: 1px solid var(--line); border-radius: 18px; padding: 16px 12px; text-align: center; display: flex; flex-direction: column; gap: 8px; }
-    .prod-ico { font-size: 44px; line-height: 1; }
+    .prod { background: var(--card); border: 1px solid var(--line); border-radius: 18px; padding: 16px 12px; text-align: center; display: flex; flex-direction: column; gap: 6px; cursor: pointer; }
+    .prod:active { transform: scale(.97); }
+    .prod-ico { font-size: 40px; line-height: 1; }
     .prod-name { font-weight: 600; font-size: 14px; }
     .prod-price { color: var(--muted); font-size: 13px; }
-    .buyer-bar { display: flex; align-items: center; justify-content: space-between; gap: 10px; background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 13px 16px; margin: 8px 0 14px; }
-    .buyer-bal { font-weight: 800; font-size: 18px; }
-    .slot { margin-top: 18px; background: var(--bg-2); border: 1px dashed var(--line); border-radius: 16px; min-height: 70px; display: grid; place-items: center; color: var(--muted); font-size: 14px; overflow: hidden; }
-    .drop { animation: drop .6s ease; font-size: 40px; }
-    @keyframes drop { 0% { transform: translateY(-60px); opacity: 0; } 60% { transform: translateY(6px); opacity: 1; } 100% { transform: translateY(0); } }
+    .seller-bar { display: flex; align-items: center; justify-content: space-between; gap: 10px; background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 13px 16px; margin: 8px 0 14px; }
+    .seller-bal { font-weight: 800; font-size: 18px; }
+    .cart-line { display: flex; align-items: center; gap: 10px; padding: 10px 2px; border-bottom: 1px solid var(--line); }
+    .cart-line:last-child { border-bottom: none; }
+    .cart-line .nm { flex: 1; }
+    .qty { display: flex; align-items: center; gap: 8px; }
+    .qty button { width: 30px; height: 30px; border-radius: 8px; border: 1px solid var(--line); background: var(--card-2); color: var(--txt); font-size: 18px; cursor: pointer; }
+    .total-row { display: flex; justify-content: space-between; align-items: center; font-size: 20px; font-weight: 800; margin-top: 8px; }
     .pin-login { max-width: 320px; margin: 30px auto; text-align: center; }
     .pin-login input { width: 100%; text-align: center; letter-spacing: 8px; font-size: 22px; background: var(--bg-2); border: 1px solid var(--line); border-radius: 12px; padding: 14px; color: var(--txt); outline: none; margin: 12px 0; }
+    .confetti-cv { position: fixed; inset: 0; z-index: 90; pointer-events: none; }
   </style>
 </head>
 <body>
@@ -30,7 +35,7 @@
     <div class="vend-head">
       <div style="display:flex;align-items:center;gap:10px">
         <div class="brand-logo small">TF</div>
-        <div><div style="font-weight:800;letter-spacing:1px">TF VENDING</div><div class="muted" style="font-size:12px">Automat TF CARD</div></div>
+        <div><div style="font-weight:800;letter-spacing:1px">TF SPRZEDAWCA</div><div class="muted" style="font-size:12px">Kasa — przyjmuj płatności</div></div>
       </div>
       <a href="../" class="btn btn-ghost btn-sm" style="text-decoration:none">← Aplikacja</a>
     </div>
@@ -38,11 +43,20 @@
     <div id="vend-content"></div>
   </div>
 
+  <!-- skaner QR klienta -->
+  <div id="qr-scanner" class="qr-scanner hidden">
+    <video id="qr-video" playsinline></video>
+    <div class="qr-frame"></div>
+    <div class="qr-scan-hint">Skieruj aparat na kod QR klienta</div>
+    <button class="btn btn-ghost" id="qr-scan-close">Anuluj</button>
+  </div>
+
   <div id="toast" class="toast"></div>
 
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jsQR/1.4.0/jsQR.min.js"></script>
   <script src="../firebase-config.js"></script>
   <script src="../store.js"></script>
   <script>
@@ -51,10 +65,9 @@
     const fmt = (n) => new Intl.NumberFormat('pl-PL', { style: 'currency', currency: 'PLN' }).format(Number(n) || 0);
     const num = (n) => Number(n) || 0;
     const esc = (s) => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-
     const products = () => Store.meta().vending || [];
 
-    let lastDrop = '';
+    let cart = {}; // { productId: qty }
 
     function toast(msg, kind = '') {
       const el = document.getElementById('toast');
@@ -63,22 +76,26 @@
       toast._t = setTimeout(() => { el.className = 'toast ' + kind; }, 2600);
     }
 
-    function buyer() {
+    function seller() {
       const s = JSON.parse(localStorage.getItem(SESSION_KEY) || 'null');
       if (s && s.type === 'user') return Store.state().users[s.id] || null;
       return null;
     }
+    function cartTotal() {
+      return products().reduce((t, p) => t + (cart[p.id] ? p.price * cart[p.id] : 0), 0);
+    }
+    function cartCount() { return Object.values(cart).reduce((a, b) => a + b, 0); }
 
     function render() {
-      const el = document.getElementById('vend-storage');
-      el.textContent = Store.backend === 'firebase' ? '🔒 Połączono z chmurą' : '⚠️ Tryb lokalny';
-      const u = buyer();
+      document.getElementById('vend-storage').textContent =
+        Store.backend === 'firebase' ? '🔒 Połączono z chmurą' : '⚠️ Tryb lokalny';
+      const s = seller();
       const c = document.getElementById('vend-content');
-      if (!u) {
+      if (!s) {
         c.innerHTML = `
           <div class="pin-login">
-            <h3>Zaloguj się PIN-em</h3>
-            <p class="muted" style="font-size:13px">Podaj swój kod PIN, aby kupować z automatu.</p>
+            <h3>Zaloguj się jako sprzedawca</h3>
+            <p class="muted" style="font-size:13px">Podaj swój PIN — wpłaty trafią na Twoje konto.</p>
             <input id="vpin" inputmode="numeric" maxlength="8" placeholder="PIN" />
             <button class="btn btn-primary btn-block" id="vlogin">Zaloguj</button>
           </div>`;
@@ -86,25 +103,44 @@
         document.getElementById('vpin').addEventListener('keydown', e => { if (e.key === 'Enter') vlogin(); });
         return;
       }
+      const prods = products();
+      const cartLines = prods.filter(p => cart[p.id]).map(p => `
+        <div class="cart-line">
+          <div class="nm">${esc(p.icon || '🛍️')} ${esc(p.name)} <span class="muted">${fmt(p.price)}</span></div>
+          <div class="qty">
+            <button data-dec="${p.id}">−</button><b>${cart[p.id]}</b><button data-inc="${p.id}">+</button>
+          </div>
+        </div>`).join('');
       c.innerHTML = `
-        <div class="buyer-bar">
-          <div><div class="muted" style="font-size:12px">Kupujący</div><div style="font-weight:700">${esc(u.name)}</div></div>
-          <div style="text-align:right"><div class="muted" style="font-size:12px">Saldo</div><div class="buyer-bal">${fmt(u.balance)}</div></div>
+        <div class="seller-bar">
+          <div><div class="muted" style="font-size:12px">Sprzedawca</div><div style="font-weight:700">${esc(s.name)}</div></div>
+          <div style="text-align:right"><div class="muted" style="font-size:12px">Utarg / saldo</div><div class="seller-bal">${fmt(s.balance)}</div></div>
           <button class="btn btn-ghost btn-sm" id="vlogout">Wyjdź</button>
         </div>
-        ${u.frozen ? '<div class="card" style="border-color:var(--gold);margin-bottom:12px">❄️ Płatności zablokowane — odblokuj w aplikacji.</div>' : ''}
-        ${products().length ? `<div class="vend-grid">
-          ${products().map(p => `
-            <div class="prod">
-              <div class="prod-ico">${esc(p.icon || '🛒')}</div>
+        <div class="section-title">Produkty</div>
+        ${prods.length ? `<div class="vend-grid">
+          ${prods.map(p => `
+            <div class="prod" data-add="${p.id}">
+              <div class="prod-ico">${esc(p.icon || '🛍️')}</div>
               <div class="prod-name">${esc(p.name)}</div>
               <div class="prod-price">${fmt(p.price)}</div>
-              <button class="btn btn-primary btn-sm" data-buy="${p.id}" ${u.frozen ? 'disabled' : ''}>Kup</button>
             </div>`).join('')}
-        </div>` : '<div class="slot">Brak produktów — dodaj je w panelu admina (TF Vending).</div>'}
-        <div class="slot" id="slot">${lastDrop ? `<span class="drop">${lastDrop}</span>` : 'Odbiór produktu tutaj ⬇️'}</div>`;
-      document.getElementById('vlogout').onclick = () => { localStorage.removeItem(SESSION_KEY); render(); };
-      c.querySelectorAll('[data-buy]').forEach(b => b.onclick = () => buy(b.dataset.buy));
+        </div>` : '<div class="card"><div class="empty">Brak produktów — dodaj je w panelu admina (Produkty do sprzedaży).</div></div>'}
+        <div class="section-title">Koszyk</div>
+        <div class="card">
+          ${cartCount() ? cartLines : '<div class="empty">Dotknij produkt, aby dodać</div>'}
+          <div class="total-row"><span>Razem</span><span>${fmt(cartTotal())}</span></div>
+          <div class="row-2 mt">
+            <button class="btn btn-primary" id="charge" ${cartCount() ? '' : 'disabled'}>Przyjmij płatność</button>
+            <button class="btn btn-ghost" id="clear" ${cartCount() ? '' : 'disabled'}>Wyczyść</button>
+          </div>
+        </div>`;
+      document.getElementById('vlogout').onclick = () => { localStorage.removeItem(SESSION_KEY); cart = {}; render(); };
+      c.querySelectorAll('[data-add]').forEach(el => el.onclick = () => { cart[el.dataset.add] = (cart[el.dataset.add] || 0) + 1; render(); });
+      c.querySelectorAll('[data-inc]').forEach(el => el.onclick = () => { cart[el.dataset.inc]++; render(); });
+      c.querySelectorAll('[data-dec]').forEach(el => el.onclick = () => { cart[el.dataset.dec]--; if (cart[el.dataset.dec] <= 0) delete cart[el.dataset.dec]; render(); });
+      document.getElementById('clear').onclick = () => { cart = {}; render(); };
+      document.getElementById('charge').onclick = charge;
     }
 
     function vlogin() {
@@ -115,18 +151,88 @@
       render();
     }
 
-    async function buy(pid) {
-      const p = products().find(x => x.id === pid);
-      const u = buyer();
-      if (!p || !u) return;
-      if (u.frozen) return toast('Płatności zablokowane', 'bad');
-      if (num(u.balance) < p.price) return toast('Za mało środków', 'bad');
-      await Store.updateUser(u.id, { balance: num(u.balance) - p.price });
-      await Store.pushTx(u.id, { type: 'out', title: `Automat: ${p.name}`, amount: p.price, ts: Date.now() });
-      lastDrop = p.icon;
-      toast(`Wydano: ${p.name} ${p.icon}`, 'good');
-      render();
-      setTimeout(() => { lastDrop = ''; }, 4000);
+    function charge() {
+      const total = cartTotal();
+      if (total <= 0) return;
+      // poproś o klienta: skan QR lub PIN
+      const code = prompt(`Do zapłaty: ${fmt(total)}\n\nWpisz PIN klienta lub kod TFPAY:..., albo OK aby zeskanować QR.`);
+      if (code === null) { startScan(onCustomer); return; }
+      const v = code.trim();
+      if (!v) { startScan(onCustomer); return; }
+      onCustomer(v);
+    }
+
+    async function onCustomer(raw) {
+      const total = cartTotal();
+      const s = seller();
+      if (!s || total <= 0) return;
+      const v = (raw || '').trim();
+      let customer = null;
+      if (/^TFPAY:/i.test(v)) customer = Store.state().users[v.replace(/^TFPAY:/i, '')];
+      else customer = Store.users().find(u => u.pin === v);
+      if (!customer) return toast('Nie znaleziono klienta', 'bad');
+      if (customer.id === s.id) return toast('To Twoje konto', 'bad');
+      if (customer.frozen) return toast('Klient ma zablokowane płatności', 'bad');
+      if (num(customer.balance) < total) return toast('Klient ma za mało środków', 'bad');
+
+      const items = products().filter(p => cart[p.id]).map(p => `${p.name}×${cart[p.id]}`).join(', ');
+      await Store.updateUser(customer.id, { balance: num(customer.balance) - total });
+      await Store.pushTx(customer.id, { type: 'out', title: `Zakup u ${s.name}: ${items}`, amount: total, ts: Date.now() });
+      await Store.updateUser(s.id, { balance: num(s.balance) + total });
+      await Store.pushTx(s.id, { type: 'in', title: `Sprzedaż: ${items}`, amount: total, ts: Date.now() });
+      toast(`Przyjęto ${fmt(total)} od ${customer.name} ✓`, 'good');
+      celebrate();
+      cart = {}; render();
+    }
+
+    /* skaner QR */
+    let _stream = null, _raf = null;
+    function startScan(onResult) {
+      if (!window.jsQR) return toast('Skaner niedostępny — wpisz PIN klienta', 'bad');
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return toast('Brak dostępu do kamery', 'bad');
+      const overlay = document.getElementById('qr-scanner');
+      const video = document.getElementById('qr-video');
+      overlay.classList.remove('hidden');
+      document.getElementById('qr-scan-close').onclick = stopScan;
+      navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } }).then(stream => {
+        _stream = stream; video.srcObject = stream; video.setAttribute('playsinline', 'true'); video.play();
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
+        const tick = () => {
+          if (!_stream) return;
+          if (video.readyState === video.HAVE_ENOUGH_DATA) {
+            canvas.width = video.videoWidth; canvas.height = video.videoHeight;
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const res = jsQR(img.data, img.width, img.height, { inversionAttempts: 'dontInvert' });
+            if (res && res.data) { const d = res.data; stopScan(); onResult(d); return; }
+          }
+          _raf = requestAnimationFrame(tick);
+        };
+        _raf = requestAnimationFrame(tick);
+      }).catch(() => { overlay.classList.add('hidden'); toast('Nie udało się włączyć kamery', 'bad'); });
+    }
+    function stopScan() {
+      document.getElementById('qr-scanner').classList.add('hidden');
+      if (_raf) { cancelAnimationFrame(_raf); _raf = null; }
+      if (_stream) { _stream.getTracks().forEach(t => t.stop()); _stream = null; }
+      const v = document.getElementById('qr-video'); if (v) v.srcObject = null;
+    }
+
+    function celebrate() {
+      if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+      const cv = document.createElement('canvas'); cv.className = 'confetti-cv'; document.body.appendChild(cv);
+      const ctx = cv.getContext('2d'); const dpr = devicePixelRatio || 1;
+      const W = cv.width = innerWidth * dpr, H = cv.height = innerHeight * dpr;
+      cv.style.width = innerWidth + 'px'; cv.style.height = innerHeight + 'px';
+      const cols = ['#6e8bff', '#a06bff', '#2ee6a6', '#f4c45a', '#ff5d7a', '#fff'];
+      const P = Array.from({ length: 120 }, () => ({ x: W / 2, y: H * .3, vx: (Math.random() - .5) * 11 * dpr, vy: (Math.random() * -10 - 5) * dpr, g: .3 * dpr, s: (4 + Math.random() * 6) * dpr, r: Math.random() * 6, vr: (Math.random() - .5) * .4, c: cols[(Math.random() * cols.length) | 0] }));
+      const t0 = performance.now();
+      (function f(t) {
+        const e = t - t0; ctx.clearRect(0, 0, W, H);
+        P.forEach(p => { p.vy += p.g; p.x += p.vx; p.y += p.vy; p.r += p.vr; ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.r); ctx.globalAlpha = Math.max(0, 1 - e / 1800); ctx.fillStyle = p.c; ctx.fillRect(-p.s / 2, -p.s / 2, p.s, p.s * .5); ctx.restore(); });
+        if (e < 1800) requestAnimationFrame(f); else cv.remove();
+      })(t0);
     }
 
     Store.init().then(() => { Store.subscribe(render); render(); });

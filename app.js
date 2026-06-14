@@ -756,8 +756,8 @@ function viewMore(u) {
       ${item('stats', '📊', 'Statystyki', 'podsumowanie konta')}
       ${item('profile', '👤', 'Profil', u.frozen ? 'płatności zablokowane' : 'dane, PIN, blokada')}
       <a class="more-item" href="vending/" style="text-decoration:none;color:inherit">
-        <div class="more-ico">🥤</div>
-        <div class="more-main"><div class="more-label">TF Vending</div><div class="more-sub">automat — kup przekąski</div></div>
+        <div class="more-ico">🛍️</div>
+        <div class="more-main"><div class="more-label">Sprzedawca (kasa)</div><div class="more-sub">przyjmuj płatności za produkty</div></div>
         <div class="more-arrow">›</div>
       </a>
     </div>
@@ -876,10 +876,10 @@ function renderAdmin() {
       </div>
     </div>
 
-    <div class="section-title">TF Vending — produkty 🥤</div>
+    <div class="section-title">Produkty do sprzedaży 🛍️</div>
     <div class="card">
       <div class="admin-actions" style="margin:0 0 10px">
-        <input type="text" id="vend-emoji" maxlength="2" placeholder="🥤" style="max-width:60px;text-align:center" />
+        <input type="text" id="vend-emoji" maxlength="2" placeholder="🛍️" style="max-width:60px;text-align:center" />
         <input type="text" id="vend-name" placeholder="Nazwa produktu" style="max-width:160px" />
         <input type="number" id="vend-price" min="0.01" step="0.01" placeholder="Cena zł" style="max-width:90px" />
         <button class="btn btn-good btn-sm" id="vend-add">Dodaj produkt</button>
