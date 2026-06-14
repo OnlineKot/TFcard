@@ -103,6 +103,23 @@ function subLabel(u) {
   return a.length ? a.join(' + ') : 'STANDARD';
 }
 
+/* Ile dni do najbliższych urodzin (null gdy brak daty) */
+function daysToBirthday(u) {
+  if (!u || !u.birthday) return null;
+  const [m, d] = u.birthday.split('-').map(Number);
+  if (!m || !d) return null;
+  const now = new Date(); now.setHours(0, 0, 0, 0);
+  let next = new Date(now.getFullYear(), m - 1, d);
+  if (next < now) next = new Date(now.getFullYear() + 1, m - 1, d);
+  return Math.round((next - now) / 86400000);
+}
+function bdayLine(u) {
+  const d = daysToBirthday(u);
+  if (d === null) return '';
+  const txt = d === 0 ? 'Dziś Twoje urodziny! 🎉' : `Do urodzin: ${d} ${d === 1 ? 'dzień' : 'dni'}`;
+  return `<div class="muted" style="font-size:12px;margin-top:6px">🎂 ${txt}</div>`;
+}
+
 /* Prezent urodzinowy — TEOpoints + kasa, raz w roku, zależnie od planu */
 async function checkBirthday() {
   const u = currentUser(); if (!u || !u.birthday) return;
@@ -357,6 +374,7 @@ function viewHome(u) {
       <div class="balance-label">Cześć, ${esc(u.name.split(' ')[0])} 👋 • ${new Date().toLocaleDateString('pl-PL', { weekday: 'long', day: 'numeric', month: 'long' })}</div>
       <div class="balance-amount">${fmt(u.balance)}</div>
       ${(u.frozen) ? '<div class="badge gold" style="margin-top:6px;display:inline-block">❄️ Płatności zablokowane</div>' : ''}
+      ${bdayLine(u)}
     </div>
     <div class="actions-row">
       <div class="action" data-go="pay"><div class="circle">💸</div><span>Wyślij</span></div>
@@ -747,6 +765,7 @@ function viewProfile(u) {
       <div class="tx"><div class="tx-main"><div class="tx-title">Imię</div></div><div>${esc(u.name)}</div></div>
       <div class="tx"><div class="tx-main"><div class="tx-title">Subskrypcje</div></div><div>${esc(subLabel(u))}</div></div>
       <div class="tx"><div class="tx-main"><div class="tx-title">Płatności</div></div><div>${u.frozen ? '❄️ Zablokowane' : '✅ Aktywne'}</div></div>
+      ${u.birthday ? `<div class="tx"><div class="tx-main"><div class="tx-title">Do urodzin</div></div><div>${daysToBirthday(u) === 0 ? 'dziś! 🎉' : daysToBirthday(u) + ' dni'}</div></div>` : ''}
       <div class="tx"><div class="tx-main"><div class="tx-title">Klient od</div></div><div>${new Date(u.createdAt).toLocaleDateString('pl-PL')}</div></div>
     </div>
     <div class="section-title">Bezpieczeństwo</div>
