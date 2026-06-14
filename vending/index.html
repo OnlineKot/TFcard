@@ -52,17 +52,7 @@
     const num = (n) => Number(n) || 0;
     const esc = (s) => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
-    const PRODUCTS = [
-      { id: 'p1', name: 'Cola', icon: '🥤', price: 6.00 },
-      { id: 'p2', name: 'Woda', icon: '💧', price: 4.00 },
-      { id: 'p3', name: 'Kawa', icon: '☕', price: 8.00 },
-      { id: 'p4', name: 'Czekolada', icon: '🍫', price: 5.50 },
-      { id: 'p5', name: 'Chipsy', icon: '🍟', price: 7.00 },
-      { id: 'p6', name: 'Energetyk', icon: '⚡', price: 9.00 },
-      { id: 'p7', name: 'Sok', icon: '🧃', price: 6.50 },
-      { id: 'p8', name: 'Baton', icon: '🍪', price: 5.00 },
-      { id: 'p9', name: 'Guma', icon: '🍬', price: 3.00 },
-    ];
+    const products = () => Store.meta().vending || [];
 
     let lastDrop = '';
 
@@ -103,15 +93,15 @@
           <button class="btn btn-ghost btn-sm" id="vlogout">Wyjdź</button>
         </div>
         ${u.frozen ? '<div class="card" style="border-color:var(--gold);margin-bottom:12px">❄️ Płatności zablokowane — odblokuj w aplikacji.</div>' : ''}
-        <div class="vend-grid">
-          ${PRODUCTS.map(p => `
+        ${products().length ? `<div class="vend-grid">
+          ${products().map(p => `
             <div class="prod">
-              <div class="prod-ico">${p.icon}</div>
-              <div class="prod-name">${p.name}</div>
+              <div class="prod-ico">${esc(p.icon || '🛒')}</div>
+              <div class="prod-name">${esc(p.name)}</div>
               <div class="prod-price">${fmt(p.price)}</div>
               <button class="btn btn-primary btn-sm" data-buy="${p.id}" ${u.frozen ? 'disabled' : ''}>Kup</button>
             </div>`).join('')}
-        </div>
+        </div>` : '<div class="slot">Brak produktów — dodaj je w panelu admina (TF Vending).</div>'}
         <div class="slot" id="slot">${lastDrop ? `<span class="drop">${lastDrop}</span>` : 'Odbiór produktu tutaj ⬇️'}</div>`;
       document.getElementById('vlogout').onclick = () => { localStorage.removeItem(SESSION_KEY); render(); };
       c.querySelectorAll('[data-buy]').forEach(b => b.onclick = () => buy(b.dataset.buy));
@@ -126,7 +116,7 @@
     }
 
     async function buy(pid) {
-      const p = PRODUCTS.find(x => x.id === pid);
+      const p = products().find(x => x.id === pid);
       const u = buyer();
       if (!p || !u) return;
       if (u.frozen) return toast('Płatności zablokowane', 'bad');

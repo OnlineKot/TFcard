@@ -230,6 +230,12 @@ body {
 /* =================== KONFETTI =================== */
 .confetti-cv { position: fixed; inset: 0; z-index: 90; pointer-events: none; }
 
+/* =================== SKANER QR =================== */
+.qr-scanner { position: fixed; inset: 0; z-index: 95; background: #000; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; padding: calc(20px + env(safe-area-inset-top)) 20px calc(20px + env(safe-area-inset-bottom)); }
+.qr-scanner video { width: 100%; max-width: 480px; max-height: 70vh; object-fit: cover; border-radius: 18px; background: #111; }
+.qr-frame { position: absolute; width: min(70vw, 300px); height: min(70vw, 300px); border: 3px solid rgba(255,255,255,.85); border-radius: 22px; box-shadow: 0 0 0 9999px rgba(0,0,0,.35); pointer-events: none; }
+.qr-scan-hint { color: #fff; font-size: 14px; opacity: .9; }
+
 /* =================== TF GOAL =================== */
 .goal-card { display: flex; align-items: center; gap: 16px; }
 .goal-ring { flex-shrink: 0; }

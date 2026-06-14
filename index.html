@@ -100,6 +100,14 @@
     </div>
   </div>
 
+  <!-- ============ SKANER QR ============ -->
+  <div id="qr-scanner" class="qr-scanner hidden">
+    <video id="qr-video" playsinline></video>
+    <div class="qr-frame"></div>
+    <div class="qr-scan-hint">Skieruj aparat na kod QR</div>
+    <button class="btn btn-ghost" id="qr-scan-close">Anuluj</button>
+  </div>
+
   <div id="toast" class="toast"></div>
 
   <!-- Firebase SDK (Firestore + Auth + Analytics) -->
@@ -107,8 +115,9 @@
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-analytics-compat.js"></script>
-  <!-- Generator kodów QR (płatności) -->
+  <!-- Generator + skaner kodów QR (płatności) -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jsQR/1.4.0/jsQR.min.js"></script>
   <script src="firebase-config.js"></script>
   <script src="store.js"></script>
   <script src="app.js"></script>

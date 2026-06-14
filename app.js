@@ -406,6 +406,41 @@ function renderQR(elId, text) {
   el.appendChild(img);
 }
 
+/* Skaner QR — kamera + jsQR */
+let _scanStream = null, _scanRAF = null;
+function startScan(onResult) {
+  if (!window.jsQR) return toast('Skaner niedostępny — wpisz kod ręcznie', 'bad');
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return toast('Brak dostępu do kamery', 'bad');
+  const overlay = document.getElementById('qr-scanner');
+  const video = document.getElementById('qr-video');
+  overlay.classList.remove('hidden');
+  document.getElementById('qr-scan-close').onclick = stopScan;
+  navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } }).then(stream => {
+    _scanStream = stream; video.srcObject = stream; video.setAttribute('playsinline', 'true');
+    video.play();
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    const tick = () => {
+      if (!_scanStream) return;
+      if (video.readyState === video.HAVE_ENOUGH_DATA) {
+        canvas.width = video.videoWidth; canvas.height = video.videoHeight;
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const res = jsQR(img.data, img.width, img.height, { inversionAttempts: 'dontInvert' });
+        if (res && res.data) { const data = res.data; stopScan(); onResult(data); return; }
+      }
+      _scanRAF = requestAnimationFrame(tick);
+    };
+    _scanRAF = requestAnimationFrame(tick);
+  }).catch(() => { overlay.classList.add('hidden'); toast('Nie udało się włączyć kamery', 'bad'); });
+}
+function stopScan() {
+  document.getElementById('qr-scanner').classList.add('hidden');
+  if (_scanRAF) { cancelAnimationFrame(_scanRAF); _scanRAF = null; }
+  if (_scanStream) { _scanStream.getTracks().forEach(t => t.stop()); _scanStream = null; }
+  const video = document.getElementById('qr-video'); if (video) video.srcObject = null;
+}
+
 function viewQr(u) {
   const frozen = !!u.frozen;
   return `
@@ -421,13 +456,23 @@ function viewQr(u) {
     <div class="card">
       ${frozen ? '<p class="muted" style="margin-bottom:10px">❄️ Płatności zablokowane (odblokuj w Profilu).</p>' : ''}
       <div class="field"><label>Kod odbiorcy (TFPAY:...)</label><input type="text" id="qr-code" placeholder="TFPAY:u-xxxxxxxx" ${frozen ? 'disabled' : ''} /></div>
-      <div class="field"><label>Kwota (PLN)</label><input type="number" id="qr-amount" min="0.01" step="0.01" placeholder="0,00" ${frozen ? 'disabled' : ''} /></div>
+      <button class="btn btn-ghost btn-block" id="qr-scan" ${frozen ? 'disabled' : ''}>📷 Skanuj kod QR</button>
+      <div class="field mt"><label>Kwota (PLN)</label><input type="number" id="qr-amount" min="0.01" step="0.01" placeholder="0,00" ${frozen ? 'disabled' : ''} /></div>
       <button class="btn btn-primary btn-block" id="qr-pay" ${frozen ? 'disabled' : ''}>Zapłać</button>
     </div>`;
 }
 
 function wireQr(u) {
   renderQR('qr-box', payCode(u));
+  document.getElementById('qr-scan').addEventListener('click', () => {
+    if (u.frozen) return toast('Płatności zablokowane', 'bad');
+    startScan((text) => {
+      const code = (text || '').trim();
+      if (!/^TFPAY:/i.test(code)) { toast('To nie jest kod TF PAY', 'bad'); return; }
+      document.getElementById('qr-code').value = code;
+      toast('Zeskanowano kod ✓', 'good');
+    });
+  });
   document.getElementById('qr-pay').addEventListener('click', async () => {
     if (u.frozen) return toast('Płatności zablokowane', 'bad');
     const raw = document.getElementById('qr-code').value.trim();
@@ -482,26 +527,9 @@ function viewSubs(u) {
 
 function wireSubs() { /* brak akcji użytkownika — subskrypcje nadaje admin */ }
 
-/* ---------- TEOpoints (punkty i zakupy przyznaje WYŁĄCZNIE admin) ---------- */
-const REWARDS = [
-  { id: 'r1', name: 'Kawa na koszt TF', cost: 50, icon: '☕' },
-  { id: 'r2', name: 'Zwrot 10 zł na konto', cost: 200, icon: '💵', cash: 10 },
-  { id: 'r3', name: 'Naklejki TF CARD', cost: 80, icon: '🏷️' },
-  { id: 'r4', name: 'Bilet do kina', cost: 500, icon: '🎬' },
-  { id: 'r5', name: 'Zwrot 50 zł na konto', cost: 900, icon: '💰', cash: 50 },
-];
-
+/* ---------- TEOpoints (punkty przyznaje WYŁĄCZNIE admin) ---------- */
 function viewTeo(u) {
   const history = txArr(u).filter(t => t.type === 'teo_in' || t.type === 'teo_out');
-  const purchases = txArr(u).filter(t => t.type === 'teo_out');
-  const purchasesHTML = purchases.length
-    ? `<div class="tx-list">` + purchases.map(t => `
-        <div class="tx">
-          <div class="tx-ico">🎁</div>
-          <div class="tx-main"><div class="tx-title">${esc(t.title)}</div><div class="tx-sub">${fmtDate(t.ts)}</div></div>
-          <div class="tx-amt">${t.amount} 💎</div>
-        </div>`).join('') + `</div>`
-    : `<div class="empty">Nic jeszcze nie kupiono</div>`;
   return `
     <div class="greeting">TEOpoints 💎</div>
     <div class="greeting-sub">Program lojalnościowy TF CARD</div>
@@ -510,9 +538,7 @@ function viewTeo(u) {
       <div><div class="bankcard-balance-label">Twoje punkty</div><div class="bankcard-balance">${num(u.teo)} 💎</div></div>
       <div class="bankcard-bottom"><span>${esc(u.name.toUpperCase())}</span><span>TF&nbsp;LOYALTY</span></div>
     </div>
-    <p class="center muted" style="font-size:12px;margin-top:6px">Punkty i zakupy przyznaje wyłącznie administrator.</p>
-    <div class="section-title">Twoje zakupy</div>
-    <div class="card">${purchasesHTML}</div>
+    <p class="center muted" style="font-size:12px;margin-top:6px">Punkty TEOpoints przyznaje wyłącznie administrator.</p>
     <div class="section-title">Historia punktów</div>
     <div class="card">${txListHTML(history)}</div>`;
 }
@@ -785,10 +811,6 @@ function renderAdmin() {
         <button class="btn btn-danger btn-sm" data-adm="teo-sub">Zabierz</button>
       </div>
       <div class="admin-actions">
-        <select class="adm-buy">${REWARDS.map(r => `<option value="${r.id}">${r.icon} ${r.name} • ${r.cost}💎${r.cash ? ` (+${fmt(r.cash)})` : ''}</option>`).join('')}</select>
-        <button class="btn btn-good btn-sm" data-adm="buy">Przyznaj zakup</button>
-      </div>
-      <div class="admin-actions">
         <input type="number" class="adm-debt" placeholder="Dług zł" style="max-width:90px" />
         <button class="btn btn-danger btn-sm" data-adm="debt-add">Nadaj dług</button>
         <button class="btn btn-good btn-sm" data-adm="debt-sub">Umorz dług</button>
@@ -854,6 +876,24 @@ function renderAdmin() {
       </div>
     </div>
 
+    <div class="section-title">TF Vending — produkty 🥤</div>
+    <div class="card">
+      <div class="admin-actions" style="margin:0 0 10px">
+        <input type="text" id="vend-emoji" maxlength="2" placeholder="🥤" style="max-width:60px;text-align:center" />
+        <input type="text" id="vend-name" placeholder="Nazwa produktu" style="max-width:160px" />
+        <input type="number" id="vend-price" min="0.01" step="0.01" placeholder="Cena zł" style="max-width:90px" />
+        <button class="btn btn-good btn-sm" id="vend-add">Dodaj produkt</button>
+      </div>
+      ${(Store.meta().vending || []).length
+        ? `<div class="tx-list">` + (Store.meta().vending || []).map(p => `
+            <div class="tx">
+              <div class="tx-ico">${esc(p.icon || '🛒')}</div>
+              <div class="tx-main"><div class="tx-title">${esc(p.name)}</div><div class="tx-sub">${fmt(p.price)}</div></div>
+              <button class="btn btn-danger btn-sm" data-vend-del="${p.id}">Usuń</button>
+            </div>`).join('') + `</div>`
+        : '<div class="empty">Brak produktów — dodaj powyżej</div>'}
+    </div>
+
     <div class="section-title">Użytkownicy (${users.length})</div>
     ${users.length ? '<input type="text" id="admin-search" class="admin-search" placeholder="🔎 Szukaj po imieniu…" />' : ''}
     <div id="admin-users">${usersHTML || '<div class="empty">Brak kont — utwórz w Kreatorze kont</div>'}</div>`;
@@ -871,6 +911,24 @@ function wireAdmin() {
       el.style.display = el.dataset.name.includes(q) ? '' : 'none';
     });
   });
+
+  // TF Vending — produkty
+  document.getElementById('vend-add').addEventListener('click', async () => {
+    const name = document.getElementById('vend-name').value.trim();
+    const price = parseFloat(document.getElementById('vend-price').value);
+    const icon = document.getElementById('vend-emoji').value.trim() || '🛒';
+    if (!name) return toast('Podaj nazwę produktu', 'bad');
+    if (!price || price <= 0) return toast('Podaj cenę', 'bad');
+    const list = (Store.meta().vending || []).slice();
+    list.push({ id: 'v-' + Math.random().toString(36).slice(2, 8), name, price, icon });
+    await Store.setMeta({ vending: list });
+    toast(`Dodano produkt: ${name}`, 'good'); renderAdmin();
+  });
+  document.querySelectorAll('[data-vend-del]').forEach(b => b.addEventListener('click', async () => {
+    const list = (Store.meta().vending || []).filter(p => p.id !== b.dataset.vendDel);
+    await Store.setMeta({ vending: list });
+    toast('Usunięto produkt'); renderAdmin();
+  }));
 
   document.getElementById('add-user').addEventListener('click', async () => {
     const name = document.getElementById('new-name').value.trim();
@@ -927,17 +985,6 @@ function wireAdmin() {
         await Store.pushTx(u.id, mkTx('teo_out', 'Korekta TEOpoints (admin)', amt));
         toast(`Zabrano ${amt} 💎 od ${u.name}`, 'good');
       }
-    } else if (action === 'buy') {
-      const r = REWARDS.find(x => x.id === wrap.querySelector('.adm-buy').value);
-      if (!r) return;
-      if (num(u.teo) < r.cost) return toast(`${u.name} ma za mało punktów (${num(u.teo)}/${r.cost})`, 'bad');
-      const patch = { teo: num(u.teo) - r.cost };
-      if (r.cash) patch.balance = num(u.balance) + r.cash;
-      await Store.updateUser(u.id, patch);
-      await Store.pushTx(u.id, mkTx('teo_out', `Zakup: ${r.name}`, r.cost));
-      if (r.cash) await Store.pushTx(u.id, mkTx('in', `Zwrot za zakup: ${r.name}`, r.cash));
-      track('purchase_grant', { reward: r.id });
-      toast(`Przyznano zakup „${r.name}" dla ${u.name}`, 'good');
     } else if (action === 'debt-add' || action === 'debt-sub') {
       const amt = parseFloat(wrap.querySelector('.adm-debt').value);
       if (!amt || amt <= 0) return toast('Podaj kwotę', 'bad');
@@ -991,24 +1038,10 @@ function wireAdmin() {
 function registerSW() {
   if (!('serviceWorker' in navigator)) return;
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('sw.js').then((reg) => {
-      // Sprawdzaj aktualizacje przy każdym wejściu — aplikacja jest „ulepszalna"
-      reg.update();
-      reg.addEventListener('updatefound', () => {
-        const sw = reg.installing;
-        if (!sw) return;
-        sw.addEventListener('statechange', () => {
-          if (sw.state === 'installed' && navigator.serviceWorker.controller) {
-            sw.postMessage('skip-waiting');
-            toast('Dostępna nowa wersja — aktualizuję…');
-          }
-        });
-      });
-    }).catch(() => {});
-    let refreshed = false;
-    navigator.serviceWorker.addEventListener('controllerchange', () => {
-      if (refreshed) return; refreshed = true; window.location.reload();
-    });
+    // Stabilnie: rejestracja + sprawdzenie aktualizacji w tle.
+    // Treść jest świeża dzięki strategii network-first w sw.js,
+    // więc nie wymuszamy przeładowania strony (brak „migania").
+    navigator.serviceWorker.register('sw.js').then((reg) => { reg.update(); }).catch(() => {});
   });
 }
 

@@ -1,6 +1,12 @@
-/* TF CARD — service worker (PWA: instalacja na pulpit + tryb offline powłoki) */
-const CACHE = 'tfcard-v13';
-const ASSETS = [
+/* TF CARD — service worker (stabilny cache)
+   Strategia:
+   • pliki aplikacji (HTML/CSS/JS) → network-first: online zawsze świeże,
+     offline z cache (brak „zacięć" na starej wersji)
+   • ikony/obrazki → cache-first (szybko, rzadko się zmieniają)
+   • Firebase / CDN → zawsze sieć (nie cache'ujemy)
+*/
+const CACHE = 'tfcard-v14';
+const SHELL = [
   './',
   './index.html',
   './styles.css',
@@ -8,46 +14,60 @@ const ASSETS = [
   './app.js',
   './firebase-config.js',
   './manifest.webmanifest',
-  './icon-192.png',
-  './icon-512.png',
-  './apple-touch-icon.png',
   './vending/',
   './vending/index.html',
 ];
+const ICONS = ['./icon-192.png', './icon-512.png', './apple-touch-icon.png'];
 
 self.addEventListener('install', (e) => {
-  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(ASSETS)));
-});
-
-self.addEventListener('message', (e) => {
-  if (e.data === 'skip-waiting') self.skipWaiting();
+  e.waitUntil(
+    caches.open(CACHE)
+      .then((c) => c.addAll([...SHELL, ...ICONS]).catch(() => {}))
+      .then(() => self.skipWaiting())
+  );
 });
 
 self.addEventListener('activate', (e) => {
   e.waitUntil(
-    caches.keys().then((keys) => Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k))))
+    caches.keys()
+      .then((keys) => Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k))))
       .then(() => self.clients.claim())
   );
 });
 
+function isExternal(url) {
+  return url.hostname.includes('firebaseio.com') ||
+    url.hostname.includes('firestore.googleapis.com') ||
+    url.hostname.includes('googleapis.com') ||
+    url.hostname.includes('gstatic.com') ||
+    url.hostname.includes('cloudflare.com') ||
+    url.hostname.includes('qrserver.com');
+}
+
 self.addEventListener('fetch', (e) => {
-  const url = new URL(e.request.url);
-  // Firebase / sieć: zawsze online (sync danych), nie cache'ujemy
-  if (url.hostname.includes('firebaseio.com') || url.hostname.includes('gstatic.com') || url.hostname.includes('googleapis.com')) {
+  const req = e.request;
+  if (req.method !== 'GET') return;
+  const url = new URL(req.url);
+  if (url.origin !== self.location.origin || isExternal(url)) return; // sieć, bez cache
+
+  const isIcon = /\.(png|svg|ico|jpg|jpeg|webp)$/i.test(url.pathname);
+
+  if (isIcon) {
+    // cache-first
+    e.respondWith(
+      caches.match(req).then((cached) => cached || fetch(req).then((res) => {
+        if (res && res.ok) { const cl = res.clone(); caches.open(CACHE).then((c) => c.put(req, cl)); }
+        return res;
+      }))
+    );
     return;
   }
-  if (e.request.method !== 'GET') return;
-  // Powłoka aplikacji: cache-first z aktualizacją w tle
+
+  // network-first dla reszty (HTML/CSS/JS) — zawsze świeże online, offline z cache
   e.respondWith(
-    caches.match(e.request).then((cached) => {
-      const net = fetch(e.request).then((res) => {
-        if (res && res.status === 200 && res.type === 'basic') {
-          const clone = res.clone();
-          caches.open(CACHE).then((c) => c.put(e.request, clone));
-        }
-        return res;
-      }).catch(() => cached);
-      return cached || net;
-    })
+    fetch(req).then((res) => {
+      if (res && res.ok) { const cl = res.clone(); caches.open(CACHE).then((c) => c.put(req, cl)); }
+      return res;
+    }).catch(() => caches.match(req).then((cached) => cached || caches.match('./index.html')))
   );
 });
