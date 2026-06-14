@@ -1,5 +1,5 @@
 /* TF CARD — service worker (PWA: instalacja na pulpit + tryb offline powłoki) */
-const CACHE = 'tfcard-v12';
+const CACHE = 'tfcard-v13';
 const ASSETS = [
   './',
   './index.html',
@@ -11,6 +11,8 @@ const ASSETS = [
   './icon-192.png',
   './icon-512.png',
   './apple-touch-icon.png',
+  './vending/',
+  './vending/index.html',
 ];
 
 self.addEventListener('install', (e) => {

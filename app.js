@@ -729,6 +729,11 @@ function viewMore(u) {
       ${item('debt', '📉', 'Dług', num(u.debt) > 0 ? fmt(u.debt) + ' do spłaty' : 'brak')}
       ${item('stats', '📊', 'Statystyki', 'podsumowanie konta')}
       ${item('profile', '👤', 'Profil', u.frozen ? 'płatności zablokowane' : 'dane, PIN, blokada')}
+      <a class="more-item" href="vending/" style="text-decoration:none;color:inherit">
+        <div class="more-ico">🥤</div>
+        <div class="more-main"><div class="more-label">TF Vending</div><div class="more-sub">automat — kup przekąski</div></div>
+        <div class="more-arrow">›</div>
+      </a>
     </div>
     <button class="btn btn-danger btn-block mt" id="more-logout">Wyloguj</button>`;
 }

@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no" />
+  <meta name="theme-color" content="#000000" />
+  <title>TF Vending</title>
+  <link rel="apple-touch-icon" href="../apple-touch-icon.png" />
+  <link rel="stylesheet" href="../styles.css" />
+  <style>
+    .vend-wrap { max-width: 760px; margin: 0 auto; padding: 22px 16px calc(28px + env(safe-area-inset-bottom)); }
+    .vend-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+    .vend-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-top: 8px; }
+    @media (min-width: 560px) { .vend-grid { grid-template-columns: repeat(3, 1fr); } }
+    .prod { background: var(--card); border: 1px solid var(--line); border-radius: 18px; padding: 16px 12px; text-align: center; display: flex; flex-direction: column; gap: 8px; }
+    .prod-ico { font-size: 44px; line-height: 1; }
+    .prod-name { font-weight: 600; font-size: 14px; }
+    .prod-price { color: var(--muted); font-size: 13px; }
+    .buyer-bar { display: flex; align-items: center; justify-content: space-between; gap: 10px; background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 13px 16px; margin: 8px 0 14px; }
+    .buyer-bal { font-weight: 800; font-size: 18px; }
+    .slot { margin-top: 18px; background: var(--bg-2); border: 1px dashed var(--line); border-radius: 16px; min-height: 70px; display: grid; place-items: center; color: var(--muted); font-size: 14px; overflow: hidden; }
+    .drop { animation: drop .6s ease; font-size: 40px; }
+    @keyframes drop { 0% { transform: translateY(-60px); opacity: 0; } 60% { transform: translateY(6px); opacity: 1; } 100% { transform: translateY(0); } }
+    .pin-login { max-width: 320px; margin: 30px auto; text-align: center; }
+    .pin-login input { width: 100%; text-align: center; letter-spacing: 8px; font-size: 22px; background: var(--bg-2); border: 1px solid var(--line); border-radius: 12px; padding: 14px; color: var(--txt); outline: none; margin: 12px 0; }
+  </style>
+</head>
+<body>
+  <div class="vend-wrap">
+    <div class="vend-head">
+      <div style="display:flex;align-items:center;gap:10px">
+        <div class="brand-logo small">TF</div>
+        <div><div style="font-weight:800;letter-spacing:1px">TF VENDING</div><div class="muted" style="font-size:12px">Automat TF CARD</div></div>
+      </div>
+      <a href="../" class="btn btn-ghost btn-sm" style="text-decoration:none">← Aplikacja</a>
+    </div>
+    <div id="vend-storage" class="muted" style="font-size:11px;margin-bottom:8px"></div>
+    <div id="vend-content"></div>
+  </div>
+
+  <div id="toast" class="toast"></div>
+
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+  <script src="../firebase-config.js"></script>
+  <script src="../store.js"></script>
+  <script>
+    'use strict';
+    const SESSION_KEY = 'tfcard_session_v2';
+    const fmt = (n) => new Intl.NumberFormat('pl-PL', { style: 'currency', currency: 'PLN' }).format(Number(n) || 0);
+    const num = (n) => Number(n) || 0;
+    const esc = (s) => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+    const PRODUCTS = [
+      { id: 'p1', name: 'Cola', icon: '🥤', price: 6.00 },
+      { id: 'p2', name: 'Woda', icon: '💧', price: 4.00 },
+      { id: 'p3', name: 'Kawa', icon: '☕', price: 8.00 },
+      { id: 'p4', name: 'Czekolada', icon: '🍫', price: 5.50 },
+      { id: 'p5', name: 'Chipsy', icon: '🍟', price: 7.00 },
+      { id: 'p6', name: 'Energetyk', icon: '⚡', price: 9.00 },
+      { id: 'p7', name: 'Sok', icon: '🧃', price: 6.50 },
+      { id: 'p8', name: 'Baton', icon: '🍪', price: 5.00 },
+      { id: 'p9', name: 'Guma', icon: '🍬', price: 3.00 },
+    ];
+
+    let lastDrop = '';
+
+    function toast(msg, kind = '') {
+      const el = document.getElementById('toast');
+      el.textContent = msg; el.className = 'toast show ' + kind;
+      clearTimeout(toast._t);
+      toast._t = setTimeout(() => { el.className = 'toast ' + kind; }, 2600);
+    }
+
+    function buyer() {
+      const s = JSON.parse(localStorage.getItem(SESSION_KEY) || 'null');
+      if (s && s.type === 'user') return Store.state().users[s.id] || null;
+      return null;
+    }
+
+    function render() {
+      const el = document.getElementById('vend-storage');
+      el.textContent = Store.backend === 'firebase' ? '🔒 Połączono z chmurą' : '⚠️ Tryb lokalny';
+      const u = buyer();
+      const c = document.getElementById('vend-content');
+      if (!u) {
+        c.innerHTML = `
+          <div class="pin-login">
+            <h3>Zaloguj się PIN-em</h3>
+            <p class="muted" style="font-size:13px">Podaj swój kod PIN, aby kupować z automatu.</p>
+            <input id="vpin" inputmode="numeric" maxlength="8" placeholder="PIN" />
+            <button class="btn btn-primary btn-block" id="vlogin">Zaloguj</button>
+          </div>`;
+        document.getElementById('vlogin').onclick = vlogin;
+        document.getElementById('vpin').addEventListener('keydown', e => { if (e.key === 'Enter') vlogin(); });
+        return;
+      }
+      c.innerHTML = `
+        <div class="buyer-bar">
+          <div><div class="muted" style="font-size:12px">Kupujący</div><div style="font-weight:700">${esc(u.name)}</div></div>
+          <div style="text-align:right"><div class="muted" style="font-size:12px">Saldo</div><div class="buyer-bal">${fmt(u.balance)}</div></div>
+          <button class="btn btn-ghost btn-sm" id="vlogout">Wyjdź</button>
+        </div>
+        ${u.frozen ? '<div class="card" style="border-color:var(--gold);margin-bottom:12px">❄️ Płatności zablokowane — odblokuj w aplikacji.</div>' : ''}
+        <div class="vend-grid">
+          ${PRODUCTS.map(p => `
+            <div class="prod">
+              <div class="prod-ico">${p.icon}</div>
+              <div class="prod-name">${p.name}</div>
+              <div class="prod-price">${fmt(p.price)}</div>
+              <button class="btn btn-primary btn-sm" data-buy="${p.id}" ${u.frozen ? 'disabled' : ''}>Kup</button>
+            </div>`).join('')}
+        </div>
+        <div class="slot" id="slot">${lastDrop ? `<span class="drop">${lastDrop}</span>` : 'Odbiór produktu tutaj ⬇️'}</div>`;
+      document.getElementById('vlogout').onclick = () => { localStorage.removeItem(SESSION_KEY); render(); };
+      c.querySelectorAll('[data-buy]').forEach(b => b.onclick = () => buy(b.dataset.buy));
+    }
+
+    function vlogin() {
+      const pin = document.getElementById('vpin').value.trim();
+      const user = Store.users().find(u => u.pin === pin);
+      if (!user) return toast('Błędny PIN', 'bad');
+      localStorage.setItem(SESSION_KEY, JSON.stringify({ type: 'user', id: user.id }));
+      render();
+    }
+
+    async function buy(pid) {
+      const p = PRODUCTS.find(x => x.id === pid);
+      const u = buyer();
+      if (!p || !u) return;
+      if (u.frozen) return toast('Płatności zablokowane', 'bad');
+      if (num(u.balance) < p.price) return toast('Za mało środków', 'bad');
+      await Store.updateUser(u.id, { balance: num(u.balance) - p.price });
+      await Store.pushTx(u.id, { type: 'out', title: `Automat: ${p.name}`, amount: p.price, ts: Date.now() });
+      lastDrop = p.icon;
+      toast(`Wydano: ${p.name} ${p.icon}`, 'good');
+      render();
+      setTimeout(() => { lastDrop = ''; }, 4000);
+    }
+
+    Store.init().then(() => { Store.subscribe(render); render(); });
+  </script>
+</body>
+</html>
