@@ -13,9 +13,10 @@ Dane synchronizują się między telefonami przez **Firebase**.
   uznawanie/obciążanie sald, zmiana planu, PIN-u, imienia, podgląd i usuwanie
 - **TF PAY ⚡** — przelewy między kontami TF CARD
 - **Karty 💳** — wirtualna karta, generowanie numeru
-- **Subskrypcje ⭐** — `TF CARD` (free), `TF CARD PLUS` (14,99 zł/mc),
-  `TF CARD PRO` (39,99 zł/mc). **Nadaje je administrator** — użytkownik wysyła
-  prośbę o ulepszenie, admin zatwierdza jednym kliknięciem
+- **Subskrypcje ⭐** — `TF CARD PLUS` (14,99 zł/mc) i `TF CARD PRO`
+  (39,99 zł/mc) jako **dwie niezależne subskrypcje** (można mieć każdą osobno).
+  **Nadaje je administrator** — użytkownik wysyła prośbę, admin zatwierdza
+  jednym kliknięciem
 - **Ulepszalna** — nowe wersje aplikacji wdrażają się i aktualizują
   automatycznie (service worker z auto-update)
 - **PWA** — działa offline, instaluje się na ekran początkowy (iPhone/Android)
@@ -30,17 +31,17 @@ Dane synchronizują się między telefonami przez **Firebase**.
 
 > PIN-y zmienisz w panelu admina (również PIN administratora).
 
-## ☁️ Konfiguracja Firebase (sync na wielu telefonach)
+## ☁️ Firebase (sync na wielu telefonach)
 
-Bez tego aplikacja działa lokalnie (tylko jeden telefon). Aby włączyć sync:
+Projekt: **tf-card**, baza: **Cloud Firestore**. Config jest już wpisany w
+[`firebase-config.js`](firebase-config.js). Trzeba tylko **utworzyć bazę
+Firestore** (jeśli jeszcze nie istnieje):
 
-1. Wejdź na <https://console.firebase.google.com> → **Dodaj projekt**.
-2. **Build → Realtime Database → Utwórz bazę danych** (lokalizacja
-   `europe-west1`, tryb testowy na start).
-3. **Project settings ⚙️ → Twoje aplikacje → Web (`</>`)** → zarejestruj
-   i skopiuj `firebaseConfig`.
-4. Wklej wartości do pliku [`firebase-config.js`](firebase-config.js)
-   (najważniejszy `databaseURL`), zacommituj i wypchnij.
+1. <https://console.firebase.google.com> → projekt **tf-card**.
+2. **Build → Firestore Database → Utwórz bazę danych** → lokalizacja
+   (np. `eur3`) → **tryb testowy** (na start, do testów).
+
+Bez utworzonej bazy aplikacja działa lokalnie (localStorage, jeden telefon).
 
 ## 📱 Instalacja na iPhone
 

@@ -44,6 +44,17 @@ function currentUser() {
   return Store.state().users[session.id] || null;
 }
 
+/* ---------- subskrypcje: PLUS i PRO są niezależne ---------- */
+function hasSub(u, key) { return !!(u.subs && u.subs[key]); }
+function hasReq(u, key) { return !!(u.req && u.req[key]); }
+function tierOf(u) { return hasSub(u, 'pro') ? 'pro' : hasSub(u, 'plus') ? 'plus' : 'standard'; }
+function subLabel(u) {
+  const a = [];
+  if (hasSub(u, 'plus')) a.push('PLUS');
+  if (hasSub(u, 'pro')) a.push('PRO');
+  return a.length ? a.join(' + ') : 'STANDARD';
+}
+
 /* =========================================================================
    Start
    ========================================================================= */
@@ -173,11 +184,12 @@ function render() {
 
 /* ---------- Pulpit ---------- */
 function bankCardHTML(u) {
-  const plan = PLANS[u.plan] || PLANS.standard;
+  const tier = tierOf(u);
+  const color = tier === 'pro' ? 'pro' : tier === 'plus' ? 'plus' : '';
   return `
-    <div class="bankcard ${plan.color}">
+    <div class="bankcard ${color}">
       <div class="bankcard-top">
-        <div class="bankcard-tier">TF CARD ${plan.tier}</div>
+        <div class="bankcard-tier">TF CARD ${subLabel(u)}</div>
         <div class="bankcard-chip"></div>
       </div>
       <div>
@@ -279,10 +291,9 @@ function wirePay(u) {
 
 /* ---------- Karty ---------- */
 function viewCards(u) {
-  const plan = PLANS[u.plan] || PLANS.standard;
   return `
     <div class="greeting">Twoje karty 💳</div>
-    <div class="greeting-sub">Plan: ${esc(plan.name)}</div>
+    <div class="greeting-sub">Subskrypcje: ${esc(subLabel(u))}</div>
     ${bankCardHTML(u)}
     <div class="section-title">Szczegóły</div>
     <div class="card">
@@ -290,7 +301,7 @@ function viewCards(u) {
       <div class="tx"><div class="tx-main"><div class="tx-title">Posiadacz</div></div><div>${esc(u.name)}</div></div>
       <div class="tx"><div class="tx-main"><div class="tx-title">Ważna do</div></div><div>12/29</div></div>
       <div class="tx"><div class="tx-main"><div class="tx-title">CVV</div></div><div>•••</div></div>
-      <div class="tx"><div class="tx-main"><div class="tx-title">Typ</div></div><div>${plan.tier}</div></div>
+      <div class="tx"><div class="tx-main"><div class="tx-title">Subskrypcje</div></div><div>${esc(subLabel(u))}</div></div>
     </div>
     <div class="mt"><button class="btn btn-ghost btn-block" id="card-regen">Wygeneruj nowy numer karty</button></div>`;
 }
@@ -302,24 +313,21 @@ function wireCards(u) {
   });
 }
 
-/* ---------- Plany / subskrypcje (nadawane przez admina, ulepszane na prośbę) ---------- */
-const PLAN_RANK = { standard: 0, plus: 1, pro: 2 };
-
-function planCardHTML(plan, u) {
-  const isActive = plan.id === u.plan;
-  const requested = (u.requestedPlan || '') === plan.id;
-  const isUpgrade = PLAN_RANK[plan.id] > PLAN_RANK[u.plan];
-  const badge = plan.id === 'pro' ? '<span class="badge gold">NAJLEPSZY</span>'
-    : plan.id === 'plus' ? '<span class="badge cyan">POPULARNY</span>' : '';
+/* ---------- Subskrypcje: PLUS i PRO osobno, nadawane przez admina ---------- */
+function subCardHTML(plan, u) {
+  const key = plan.id; // 'plus' | 'pro'
+  const active = hasSub(u, key);
+  const requested = hasReq(u, key);
+  const badge = key === 'pro' ? '<span class="badge gold">NAJLEPSZY</span>' : '<span class="badge cyan">POPULARNY</span>';
   let action;
-  if (isActive) action = `<button class="btn btn-good btn-block" disabled>Aktywny plan ✓</button>`;
-  else if (requested) action = `<button class="btn btn-ghost btn-block" disabled>Prośba wysłana ⏳</button>`;
-  else action = `<button class="btn btn-primary btn-block" data-req="${plan.id}">${isUpgrade ? 'Poproś o ulepszenie' : 'Poproś o ten plan'}</button>`;
+  if (active) action = `<button class="btn btn-good btn-block" disabled>Aktywna ✓</button>`;
+  else if (requested) action = `<button class="btn btn-ghost btn-block" data-cancel="${key}">Anuluj prośbę ⏳</button>`;
+  else action = `<button class="btn btn-primary btn-block" data-req="${key}">Poproś o aktywację</button>`;
   return `
     <div class="plan ${plan.color}">
       <div class="plan-head">
-        <div class="plan-name">${esc(plan.name)} ${isActive ? '<span class="badge active-badge">AKTYWNY</span>' : badge}</div>
-        <div class="plan-price">${plan.price ? fmt(plan.price) : 'Darmowy'}${plan.price ? '<small>/mc</small>' : ''}</div>
+        <div class="plan-name">${esc(plan.name)} ${active ? '<span class="badge active-badge">AKTYWNA</span>' : badge}</div>
+        <div class="plan-price">${fmt(plan.price)}<small>/mc</small></div>
       </div>
       <ul class="plan-list">${plan.features.map(f => `<li>${esc(f)}</li>`).join('')}</ul>
       ${action}
@@ -327,36 +335,26 @@ function planCardHTML(plan, u) {
 }
 
 function viewSubs(u) {
-  const reqPlan = u.requestedPlan ? PLANS[u.requestedPlan] : null;
-  const banner = reqPlan ? `
-    <div class="card" style="border-color:var(--gold);margin-bottom:14px">
-      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px">
-        <div>⏳ Wysłałeś prośbę o <b>${esc(reqPlan.name)}</b>.<div class="muted" style="font-size:12px;margin-top:2px">Administrator ją zatwierdzi.</div></div>
-        <button class="btn btn-ghost btn-sm" id="cancel-req">Anuluj</button>
-      </div>
-    </div>` : '';
   return `
-    <div class="greeting">Plany ⭐</div>
-    <div class="greeting-sub">Aktualnie: <b>${esc((PLANS[u.plan] || PLANS.standard).name)}</b></div>
-    ${banner}
-    ${planCardHTML(PLANS.pro, u)}
-    ${planCardHTML(PLANS.plus, u)}
-    ${planCardHTML(PLANS.standard, u)}
-    <p class="center muted" style="font-size:12px;margin-top:6px">Subskrypcje aktywuje administrator. Wyślij prośbę — pojawi się w panelu admina.</p>`;
+    <div class="greeting">Subskrypcje ⭐</div>
+    <div class="greeting-sub">Aktywne: <b>${esc(subLabel(u))}</b></div>
+    ${subCardHTML(PLANS.plus, u)}
+    ${subCardHTML(PLANS.pro, u)}
+    <p class="center muted" style="font-size:12px;margin-top:6px">PLUS i PRO są niezależne — możesz mieć każdą osobno. Subskrypcje aktywuje administrator po wysłaniu prośby.</p>`;
 }
 
 function wireSubs(u) {
   document.querySelectorAll('[data-req]').forEach(b => b.addEventListener('click', async () => {
-    const plan = PLANS[b.dataset.req];
-    if (!plan || u.plan === plan.id) return;
-    await Store.updateUser(u.id, { requestedPlan: plan.id });
-    toast(`Wysłano prośbę o ${plan.name}`, 'good'); render();
+    const key = b.dataset.req;
+    if (hasSub(u, key)) return;
+    await Store.updateUser(u.id, { req: Object.assign({}, u.req, { [key]: true }) });
+    toast(`Wysłano prośbę o ${PLANS[key].name}`, 'good'); render();
   }));
-  const cancel = document.getElementById('cancel-req');
-  if (cancel) cancel.addEventListener('click', async () => {
-    await Store.updateUser(u.id, { requestedPlan: '' });
+  document.querySelectorAll('[data-cancel]').forEach(b => b.addEventListener('click', async () => {
+    const key = b.dataset.cancel;
+    await Store.updateUser(u.id, { req: Object.assign({}, u.req, { [key]: false }) });
     toast('Anulowano prośbę'); render();
-  });
+  }));
 }
 
 /* =========================================================================
@@ -371,36 +369,41 @@ function showAdmin() {
 function renderAdmin() {
   const users = Store.users();
   const total = users.reduce((s, u) => s + (Number(u.balance) || 0), 0);
-  const subs = users.filter(u => u.plan && u.plan !== 'standard').length;
+  const subs = users.reduce((s, u) => s + (hasSub(u, 'plus') ? 1 : 0) + (hasSub(u, 'pro') ? 1 : 0), 0);
+
+  const reqBanner = (u, key) => hasReq(u, key) ? `
+    <div class="admin-actions" style="background:rgba(244,196,90,.1);border:1px solid var(--gold);border-radius:12px;padding:10px;margin-top:12px">
+      <span>⬆️ Prośba o <b>${PLANS[key].tier}</b></span>
+      <button class="btn btn-good btn-sm" data-adm="grant" data-key="${key}">Nadaj</button>
+      <button class="btn btn-ghost btn-sm" data-adm="reject" data-key="${key}">Odrzuć</button>
+    </div>` : '';
+
+  const subBtn = (u, key) => hasSub(u, key)
+    ? `<button class="btn btn-danger btn-sm" data-adm="revoke" data-key="${key}">Cofnij ${PLANS[key].tier}</button>`
+    : `<button class="btn btn-good btn-sm" data-adm="give" data-key="${key}">Nadaj ${PLANS[key].tier}</button>`;
 
   const usersHTML = users.map(u => `
     <div class="admin-user" data-uid="${u.id}">
       <div class="admin-user-top">
         <div>
           <div class="admin-user-name">${esc(u.name)}
-            <span class="badge ${u.plan === 'pro' ? 'gold' : u.plan === 'plus' ? 'cyan' : 'active-badge'}">${(PLANS[u.plan] || PLANS.standard).tier}</span>
+            ${hasSub(u, 'plus') ? '<span class="badge cyan">PLUS</span>' : ''}
+            ${hasSub(u, 'pro') ? '<span class="badge gold">PRO</span>' : ''}
+            ${!hasSub(u, 'plus') && !hasSub(u, 'pro') ? '<span class="badge active-badge">STANDARD</span>' : ''}
           </div>
           <div class="admin-user-meta">PIN: <b>${esc(u.pin)}</b> • Saldo: <b>${fmt(u.balance)}</b> • Transakcje: ${Object.keys(u.transactions || {}).length}</div>
           <div class="admin-user-meta">${esc(u.cardNumber)}</div>
         </div>
       </div>
-      ${u.requestedPlan ? `<div class="admin-actions" style="background:rgba(244,196,90,.1);border:1px solid var(--gold);border-radius:12px;padding:10px;margin-top:12px">
-        <span>⬆️ Prośba o <b>${(PLANS[u.requestedPlan] || {}).tier || u.requestedPlan}</b></span>
-        <button class="btn btn-good btn-sm" data-adm="grant">Nadaj</button>
-        <button class="btn btn-ghost btn-sm" data-adm="reject">Odrzuć</button>
-      </div>` : ''}
+      ${reqBanner(u, 'plus')}${reqBanner(u, 'pro')}
       <div class="admin-actions">
         <input type="number" class="adm-amt" placeholder="Kwota" style="max-width:100px" />
         <button class="btn btn-good btn-sm" data-adm="credit">Uznaj</button>
         <button class="btn btn-danger btn-sm" data-adm="debit">Obciąż</button>
       </div>
       <div class="admin-actions">
-        <select class="adm-plan">
-          <option value="standard" ${u.plan === 'standard' ? 'selected' : ''}>STANDARD</option>
-          <option value="plus" ${u.plan === 'plus' ? 'selected' : ''}>PLUS</option>
-          <option value="pro" ${u.plan === 'pro' ? 'selected' : ''}>PRO</option>
-        </select>
-        <button class="btn btn-ghost btn-sm" data-adm="plan">Plan</button>
+        ${subBtn(u, 'plus')}
+        ${subBtn(u, 'pro')}
         <input type="text" class="adm-pin" placeholder="Nowy PIN" maxlength="4" style="max-width:90px" />
         <button class="btn btn-ghost btn-sm" data-adm="setpin">Ustaw PIN</button>
       </div>
@@ -486,15 +489,20 @@ function wireAdmin() {
         await Store.pushTx(u.id, mkTx('out', 'Obciążenie TF CARD (admin)', amt));
         toast(`Obciążono ${u.name} o ${fmt(amt)}`, 'good');
       }
-    } else if (action === 'plan') {
-      await Store.updateUser(u.id, { plan: wrap.querySelector('.adm-plan').value, requestedPlan: '' });
-      toast(`Zmieniono plan: ${u.name}`, 'good');
-    } else if (action === 'grant') {
-      const plan = PLANS[u.requestedPlan];
-      await Store.updateUser(u.id, { plan: u.requestedPlan, requestedPlan: '' });
-      toast(`Nadano ${plan ? plan.name : 'plan'}: ${u.name}`, 'good');
+    } else if (action === 'give' || action === 'grant') {
+      const key = btn.dataset.key;
+      await Store.updateUser(u.id, {
+        subs: Object.assign({}, u.subs, { [key]: true }),
+        req: Object.assign({}, u.req, { [key]: false }),
+      });
+      toast(`Nadano ${PLANS[key].name}: ${u.name}`, 'good');
+    } else if (action === 'revoke') {
+      const key = btn.dataset.key;
+      await Store.updateUser(u.id, { subs: Object.assign({}, u.subs, { [key]: false }) });
+      toast(`Cofnięto ${PLANS[key].name}: ${u.name}`);
     } else if (action === 'reject') {
-      await Store.updateUser(u.id, { requestedPlan: '' });
+      const key = btn.dataset.key;
+      await Store.updateUser(u.id, { req: Object.assign({}, u.req, { [key]: false }) });
       toast(`Odrzucono prośbę: ${u.name}`);
     } else if (action === 'setpin') {
       const pin = wrap.querySelector('.adm-pin').value.trim();
