@@ -118,6 +118,22 @@ const Store = {
   newUser(opts) { return blankUser(opts.name, opts.pin, opts); },
   newCard: genCard,
 
+  /* Debet (overdraft) zależny od planu: PLUS 20 zł, PRO 35 zł */
+  overdraftLimit(u) {
+    if (!u || !u.subs) return 0;
+    if (u.subs.pro) return 35;
+    if (u.subs.plus) return 20;
+    return 0;
+  },
+  /* Zwraca patch {balance[,debt]} po obciążeniu kwotą (z uwzgl. debetu) lub null gdy za mało */
+  applyCharge(u, amount) {
+    const bal = Number(u.balance) || 0, debt = Number(u.debt) || 0;
+    const limit = this.overdraftLimit(u);
+    if (amount > bal + (limit - debt)) return null;
+    if (amount <= bal) return { balance: bal - amount };
+    return { balance: 0, debt: debt + (amount - bal) }; // brakującą część dopisz do długu
+  },
+
   /* Jednorazowe 6-cyfrowe kody płatności (mapowane na konto w meta.codes) */
   async genCode(uid) {
     const codes = Object.assign({}, this.meta().codes || {});

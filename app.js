@@ -13,9 +13,9 @@ const PLANS = {
   standard: { id: 'standard', name: 'TF CARD', tier: 'STANDARD', price: 0, color: '',
     features: ['Konto i karta TF CARD', 'Płatności TF PAY', 'Historia transakcji'] },
   plus: { id: 'plus', name: 'TF CARD PLUS', tier: 'PLUS', price: 14.99, color: 'plus',
-    features: ['Zniżka 10% w TFKF Cafe', 'Prezent urodzinowy: 100 💎 + 25 zł', 'Niebieski akcent konta', 'Wsparcie priorytetowe'] },
+    features: ['Debet do 20 zł', 'Zniżka 10% w TFKF Cafe', 'Prezent urodzinowy: 100 💎 + 25 zł', 'Niebieski akcent konta', 'Wsparcie priorytetowe'] },
   pro: { id: 'pro', name: 'TF CARD PRO', tier: 'PRO', price: 39.99, color: 'pro',
-    features: ['Zniżka 25% w TFKF Cafe', 'Prezent urodzinowy: 250 💎 + 100 zł', 'Złoty wygląd konta ✨', 'Doradca 24/7'] },
+    features: ['Debet do 35 zł', 'Zniżka 25% w TFKF Cafe', 'Prezent urodzinowy: 250 💎 + 100 zł', 'Złoty wygląd konta ✨', 'Doradca 24/7'] },
 };
 
 /* Perki zależne od planu */
@@ -445,11 +445,12 @@ function wirePay(u) {
     const title = document.getElementById('pay-title').value.trim() || 'Przelew TF PAY';
     if (!toId) return toast('Wybierz odbiorcę', 'bad');
     if (!amount || amount <= 0) return toast('Podaj poprawną kwotę', 'bad');
-    if (amount > u.balance) return toast('Niewystarczające środki', 'bad');
     const recipient = Store.state().users[toId];
     if (!recipient) return toast('Nie znaleziono odbiorcy', 'bad');
+    const charge = Store.applyCharge(u, amount);
+    if (!charge) return toast('Niewystarczające środki (limit debetu wykorzystany)', 'bad');
 
-    await Store.updateUser(u.id, { balance: u.balance - amount });
+    await Store.updateUser(u.id, charge);
     await Store.pushTx(u.id, mkTx('out', `Przelew do ${recipient.name}: ${title}`, amount));
     await Store.updateUser(recipient.id, { balance: (recipient.balance || 0) + amount });
     await Store.pushTx(recipient.id, mkTx('in', `Przelew od ${u.name}: ${title}`, amount));
@@ -562,9 +563,10 @@ function wireQr(u) {
     if (toId === u.id) return toast('To Twój własny kod', 'bad');
     const recipient = Store.state().users[toId];
     if (!recipient) return toast('Nie znaleziono odbiorcy', 'bad');
-    if (amount > num(u.balance)) return toast('Niewystarczające środki', 'bad');
+    const charge = Store.applyCharge(u, amount);
+    if (!charge) return toast('Niewystarczające środki (limit debetu wykorzystany)', 'bad');
 
-    await Store.updateUser(u.id, { balance: num(u.balance) - amount });
+    await Store.updateUser(u.id, charge);
     await Store.pushTx(u.id, mkTx('out', `Płatność QR do ${recipient.name}`, amount));
     await Store.updateUser(recipient.id, { balance: num(recipient.balance) + amount });
     await Store.pushTx(recipient.id, mkTx('in', `Płatność QR od ${u.name}`, amount));
