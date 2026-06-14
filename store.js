@@ -22,9 +22,9 @@ function genCard() {
 function blankUser(name, pin, opts = {}) {
   return {
     id: uid('u'), name, pin, balance: Number(opts.balance) || 0,
-    savings: 0, teo: Number(opts.teo) || 0, debt: 0, frozen: false,
+    savings: 0, teo: Number(opts.teo) || 0, debt: 0, debtSince: 0, frozen: false,
     goalName: '', goalTarget: 0, cafeAccess: false,
-    birthday: opts.birthday || '', bdayYear: 0,
+    birthday: opts.birthday || '', bdayYear: 0, message: '',
     subs: { plus: !!opts.plus, pro: !!opts.pro },
     cardNumber: genCard(), createdAt: Date.now(), transactions: {},
   };
@@ -34,7 +34,7 @@ function blankUser(name, pin, opts = {}) {
 function seedState() {
   // PIN administratora NIE jest zapisany w kodzie — ustawia się go przy
   // pierwszym wejściu w tryb admina (i można zmienić w panelu).
-  return { users: {}, meta: { adminPin: '', vending: [], cafe: [] } };
+  return { users: {}, meta: { adminPin: '', vending: [], cafe: [], announce: '' } };
 }
 
 function configReady(cfg) {
@@ -141,14 +141,18 @@ const Store = {
     const limit = this.overdraftLimit(u);
     if (amount > bal + (limit - debt)) return null;
     if (amount <= bal) return { balance: bal - amount };
-    return { balance: 0, debt: debt + (amount - bal) }; // brakującą część dopisz do długu
+    const patch = { balance: 0, debt: debt + (amount - bal) }; // brakującą część dopisz do długu
+    if (debt === 0) patch.debtSince = Date.now(); // start liczenia 31 dni
+    return patch;
   },
   /* Wpływ środków: najpierw spłaca dług, reszta na saldo (łączy dług z zapłatą) */
   applyCredit(u, amount) {
     const bal = Number(u.balance) || 0, debt = Number(u.debt) || 0;
     if (debt <= 0) return { balance: bal + amount };
     const pay = Math.min(debt, amount);
-    return { balance: bal + (amount - pay), debt: debt - pay };
+    const patch = { balance: bal + (amount - pay), debt: debt - pay };
+    if (debt - pay === 0) patch.debtSince = 0; // dług spłacony
+    return patch;
   },
 
   /* Jednorazowe 6-cyfrowe kody płatności (mapowane na konto w meta.codes) */

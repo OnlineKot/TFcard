@@ -121,6 +121,26 @@ function bdayLine(u) {
   return `<div class="muted" style="font-size:12px;margin-top:6px">🎂 ${txt}</div>`;
 }
 
+/* Dług: 31 dni na spłatę, potem co 31 dni rośnie o 50% */
+const DEBT_DAY = 86400000, DEBT_DAYS = 31, DEBT_RATE = 1.5;
+function debtDaysLeft(u) {
+  if (num(u.debt) <= 0) return null;
+  const since = u.debtSince || Date.now();
+  return Math.ceil((since + DEBT_DAYS * DEBT_DAY - Date.now()) / DEBT_DAY);
+}
+async function checkDebt() {
+  const u = currentUser(); if (!u) return;
+  const debt = num(u.debt); if (debt <= 0) return;
+  const since = u.debtSince || 0;
+  if (!since) { await Store.updateUser(u.id, { debtSince: Date.now() }); return; }
+  if (Date.now() >= since + DEBT_DAYS * DEBT_DAY) {
+    const inc = Math.round(debt * DEBT_RATE * 100) / 100;
+    await Store.updateUser(u.id, { debt: inc, debtSince: since + DEBT_DAYS * DEBT_DAY });
+    await Store.pushTx(u.id, mkTx('out', 'Odsetki od długu (+50%)', Math.round((inc - debt) * 100) / 100));
+    toast('Naliczono odsetki od długu (+50%)', 'bad');
+  }
+}
+
 /* Prezent urodzinowy — TEOpoints + kasa, raz w roku, zależnie od planu */
 async function checkBirthday() {
   const u = currentUser(); if (!u || !u.birthday) return;
@@ -189,7 +209,7 @@ function showStorageMode() {
 /* Reakcja na każdą zmianę danych (również z innego telefonu / od admina) */
 function onState() {
   if (session && session.type === 'user' && !currentUser()) { doLogout(); return; }
-  if (session && session.type === 'user') { showApp(); routeRender(); checkBirthday(); }
+  if (session && session.type === 'user') { showApp(); routeRender(); checkBirthday(); checkDebt(); }
   else if (session && session.type === 'admin') { showAdmin(); renderAdmin(); }
   else if (!localStorage.getItem(LANDING_KEY)) showLanding();
   else showLock();
@@ -371,6 +391,8 @@ function viewHome(u) {
         <button class="icon-btn" id="logout-btn" title="Wyloguj" style="background:var(--card-2);border:none;color:var(--txt);width:40px;height:40px;border-radius:12px;font-size:18px;cursor:pointer">⎋</button>
       </div>
     </div>
+    ${Store.meta().announce ? `<div class="card" style="border-color:var(--accent);margin-bottom:14px">📢 ${esc(Store.meta().announce)}</div>` : ''}
+    ${u.message ? `<div class="card" style="border-color:var(--gold);margin-bottom:14px">✉️ ${esc(u.message)} <button class="btn btn-ghost btn-sm mt" id="msg-clear">OK</button></div>` : ''}
     <div class="balance-block">
       <div class="balance-label">Cześć, ${esc(u.name.split(' ')[0])} 👋 • ${new Date().toLocaleDateString('pl-PL', { weekday: 'long', day: 'numeric', month: 'long' })}</div>
       <div class="balance-amount">${fmt(u.balance)}</div>
@@ -411,6 +433,8 @@ function wireHome() {
   document.querySelectorAll('[data-go]').forEach(el => el.addEventListener('click', () => navTo(el.dataset.go)));
   document.getElementById('logout-btn').addEventListener('click', doLogout);
   document.getElementById('install-btn').addEventListener('click', showInstall);
+  const mc = document.getElementById('msg-clear');
+  if (mc) mc.addEventListener('click', async () => { await Store.updateUser(currentUser().id, { message: '' }); render(); });
 }
 
 /* ---------- TF PAY ---------- */
@@ -591,9 +615,9 @@ function subCardHTML(plan, u) {
     <div class="plan ${plan.color}">
       <div class="plan-head">
         <div class="plan-name">${esc(plan.name)} ${active ? '<span class="badge active-badge">AKTYWNA</span>' : badge}</div>
-        <div class="plan-price">${fmt(plan.price)}<small>/mc</small></div>
+        <div class="plan-price">${fmt(plan.price)}</div>
       </div>
-      <div class="muted" style="font-size:13px;margin-top:4px">Cena: <b>${fmt(plan.price)}</b> miesięcznie</div>
+      <div class="muted" style="font-size:13px;margin-top:4px">Jednorazowa opłata: <b>${fmt(plan.price)}</b></div>
       <ul class="plan-list">${plan.features.map(f => `<li>${esc(f)}</li>`).join('')}</ul>
       ${action}
     </div>`;
@@ -601,11 +625,11 @@ function subCardHTML(plan, u) {
 
 function viewSubs(u) {
   return `
-    <div class="greeting">Subskrypcje ⭐</div>
+    <div class="greeting">Plany ⭐</div>
     <div class="greeting-sub">Aktywne: <b>${esc(subLabel(u))}</b></div>
     ${subCardHTML(PLANS.plus, u)}
     ${subCardHTML(PLANS.pro, u)}
-    <p class="center muted" style="font-size:12px;margin-top:6px">PLUS i PRO są niezależne. Subskrypcje nadaje wyłącznie administrator.</p>`;
+    <p class="center muted" style="font-size:12px;margin-top:6px">PLUS i PRO są niezależne. Aktywuje je administrator (jednorazowa opłata).</p>`;
 }
 
 function wireSubs() { /* brak akcji użytkownika — subskrypcje nadaje admin */ }
@@ -734,6 +758,7 @@ function viewDebt(u) {
       <div class="bankcard-bottom"><span>${esc(u.name.toUpperCase())}</span><span>TF&nbsp;CREDIT</span></div>
     </div>
     ${debt > 0 ? `
+    <div class="card" style="border-color:var(--bad);margin-top:12px">⏳ Spłać w ciągu <b>${debtDaysLeft(u) <= 0 ? '0' : debtDaysLeft(u)} dni</b> — po 31 dniach dług rośnie o <b>50%</b>.</div>
     <div class="section-title">Spłać dług z konta</div>
     <div class="card">
       <div class="field"><label>Kwota spłaty (PLN)</label><input type="number" id="debt-amount" min="0.01" step="0.01" placeholder="0,00" /></div>
@@ -749,7 +774,8 @@ function wireDebt(u) {
     if (!a || a <= 0) return toast('Podaj kwotę', 'bad');
     if (a > num(u.balance)) return toast('Za mało środków na koncie', 'bad');
     const real = Math.min(a, num(u.debt));
-    await Store.updateUser(u.id, { balance: num(u.balance) - real, debt: num(u.debt) - real });
+    const left = num(u.debt) - real;
+    await Store.updateUser(u.id, { balance: num(u.balance) - real, debt: left, debtSince: left === 0 ? 0 : (u.debtSince || Date.now()) });
     await Store.pushTx(u.id, mkTx('out', 'Spłata długu', real));
     toast(`Spłacono ${fmt(real)}`, 'good'); render();
   };
@@ -777,9 +803,20 @@ function viewProfile(u) {
       <div class="field mt"><label>Nowy PIN (4–8 cyfr)</label><input type="text" id="prof-pin" inputmode="numeric" maxlength="8" placeholder="••••" /></div>
       <button class="btn btn-primary btn-block" id="prof-save">Zapisz PIN</button>
     </div>
+    <button class="btn btn-ghost btn-block mt" id="prof-export">📋 Kopiuj historię</button>
     <button class="btn btn-danger btn-block mt" id="prof-logout">Wyloguj</button>`;
 }
 function wireProfile(u) {
+  document.getElementById('prof-export').addEventListener('click', async () => {
+    const lines = txArr(u).map(t => {
+      const v = (t.type === 'teo_in' || t.type === 'teo_out') ? t.amount + ' TEO' : fmt(t.amount);
+      const sign = (t.type === 'in' || t.type === 'teo_in' || t.type === 'unsave') ? '+' : '−';
+      return `${fmtDate(t.ts)}\t${sign}${v}\t${t.title}${t.desc ? ' — ' + t.desc : ''}`;
+    });
+    const text = `Historia TF CARD — ${u.name}\n` + lines.join('\n');
+    try { await navigator.clipboard.writeText(text); toast('Skopiowano historię', 'good'); }
+    catch (e) { prompt('Skopiuj historię:', text); }
+  });
   document.getElementById('prof-freeze').addEventListener('click', async () => {
     await Store.updateUser(u.id, { frozen: !u.frozen });
     toast(u.frozen ? 'Płatności odblokowane' : 'Płatności zablokowane ❄️', 'good'); render();
@@ -919,6 +956,10 @@ function renderAdmin() {
         <button class="btn btn-ghost btn-sm" data-adm="bday">Ustaw urodziny</button>
       </div>
       <div class="admin-actions">
+        <input type="text" class="adm-msg" placeholder="Wiadomość do usera" style="max-width:170px" value="${esc(u.message || '')}" />
+        <button class="btn btn-ghost btn-sm" data-adm="msg">Wyślij</button>
+      </div>
+      <div class="admin-actions">
         <button class="btn ${u.cafeAccess ? 'btn-good' : 'btn-ghost'} btn-sm" data-adm="cafe">☕ Cafe: ${u.cafeAccess ? 'TAK' : 'NIE'}</button>
         <button class="btn btn-ghost btn-sm" data-adm="view">Podgląd</button>
         <button class="btn btn-danger btn-sm" data-adm="delete">Usuń konto</button>
@@ -980,7 +1021,24 @@ function renderAdmin() {
         <label style="display:flex;align-items:center;gap:6px;font-size:14px"><input type="checkbox" id="new-plus" /> PLUS</label>
         <label style="display:flex;align-items:center;gap:6px;font-size:14px"><input type="checkbox" id="new-pro" /> PRO</label>
       </div>
+      <div class="admin-actions mt">
+        <input type="text" id="new-pin-rand" readonly placeholder="losowy PIN" style="max-width:120px" />
+        <button class="btn btn-ghost btn-sm" id="gen-pin">🎲 Losuj PIN</button>
+      </div>
       <button class="btn btn-primary btn-block mt" id="add-user">Utwórz konto</button>
+    </div>
+
+    <div class="section-title">Komunikacja i narzędzia 📢</div>
+    <div class="card">
+      <div class="field" style="margin:0"><label>Ogłoszenie dla wszystkich</label><input type="text" id="announce" value="${esc(Store.meta().announce || '')}" placeholder="np. Promocja w TFKF Cafe!" /></div>
+      <div class="row-2 mt">
+        <button class="btn btn-primary" id="set-announce">Ustaw ogłoszenie</button>
+        <button class="btn btn-ghost" id="clear-announce">Wyczyść</button>
+      </div>
+      <div class="admin-actions mt">
+        <input type="number" id="bonus-all" min="0" step="0.01" placeholder="Bonus zł" style="max-width:110px" />
+        <button class="btn btn-good btn-sm" id="give-all">Daj wszystkim</button>
+      </div>
     </div>
 
     <div class="section-title">PIN administratora</div>
@@ -1018,6 +1076,29 @@ function renderAdmin() {
 
 function wireAdmin() {
   document.getElementById('admin-logout').addEventListener('click', doLogout);
+
+  document.getElementById('gen-pin').addEventListener('click', () => {
+    let pin; do { pin = String(Math.floor(1000 + Math.random() * 9000)); }
+    while (pin === (Store.meta().adminPin) || Store.users().some(x => x.pin === pin));
+    document.getElementById('new-pin-rand').value = pin;
+    document.getElementById('new-pin').value = pin;
+  });
+  document.getElementById('set-announce').addEventListener('click', async () => {
+    await Store.setMeta({ announce: document.getElementById('announce').value.trim() });
+    toast('Ustawiono ogłoszenie', 'good');
+  });
+  document.getElementById('clear-announce').addEventListener('click', async () => {
+    await Store.setMeta({ announce: '' }); toast('Wyczyszczono ogłoszenie'); renderAdmin();
+  });
+  document.getElementById('give-all').addEventListener('click', async () => {
+    const amt = parseFloat(document.getElementById('bonus-all').value);
+    if (!amt || amt <= 0) return toast('Podaj kwotę', 'bad');
+    for (const usr of Store.users()) {
+      await Store.updateUser(usr.id, Store.applyCredit(usr, amt));
+      await Store.pushTx(usr.id, mkTx('in', 'Bonus od TF CARD', amt));
+    }
+    toast(`Dodano ${fmt(amt)} wszystkim (${Store.users().length})`, 'good'); renderAdmin();
+  });
 
   const search = document.getElementById('admin-search');
   if (search) search.addEventListener('input', () => {
@@ -1129,15 +1210,20 @@ function wireAdmin() {
       const amt = parseFloat(wrap.querySelector('.adm-debt').value);
       if (!amt || amt <= 0) return toast('Podaj kwotę', 'bad');
       if (action === 'debt-add') {
-        await Store.updateUser(u.id, { debt: num(u.debt) + amt });
+        await Store.updateUser(u.id, { debt: num(u.debt) + amt, debtSince: u.debtSince || Date.now() });
         toast(`Nadano dług ${fmt(amt)}: ${u.name}`, 'good');
       } else {
-        await Store.updateUser(u.id, { debt: Math.max(0, num(u.debt) - amt) });
+        const left = Math.max(0, num(u.debt) - amt);
+        await Store.updateUser(u.id, { debt: left, debtSince: left === 0 ? 0 : (u.debtSince || Date.now()) });
         toast(`Umorzono ${fmt(amt)} długu: ${u.name}`, 'good');
       }
     } else if (action === 'freeze') {
       await Store.updateUser(u.id, { frozen: !u.frozen });
       toast(u.frozen ? `Odblokowano płatności: ${u.name}` : `Zablokowano płatności: ${u.name}`, 'good');
+    } else if (action === 'msg') {
+      const m = wrap.querySelector('.adm-msg').value.trim();
+      await Store.updateUser(u.id, { message: m });
+      toast(m ? `Wysłano wiadomość: ${u.name}` : `Wyczyszczono wiadomość: ${u.name}`, 'good');
     } else if (action === 'cafe') {
       await Store.updateUser(u.id, { cafeAccess: !u.cafeAccess });
       toast(u.cafeAccess ? `Zabrano dostęp Cafe: ${u.name}` : `Nadano dostęp Cafe: ${u.name}`, 'good');
@@ -1148,9 +1234,15 @@ function wireAdmin() {
       toast(`Ustawiono urodziny: ${u.name} (${d})`, 'good');
     } else if (action === 'give') {
       const key = btn.dataset.key;
-      await Store.updateUser(u.id, { subs: Object.assign({}, u.subs, { [key]: true }) });
+      const price = PLANS[key].price;
+      const bal = num(u.balance), debt = num(u.debt);
+      const patch = { subs: Object.assign({}, u.subs, { [key]: true }) };
+      if (price <= bal) patch.balance = bal - price;       // opłata jednorazowa
+      else { patch.balance = 0; patch.debt = debt + (price - bal); if (debt === 0) patch.debtSince = Date.now(); } // brak środków → dług
+      await Store.updateUser(u.id, patch);
+      await Store.pushTx(u.id, mkTx('out', `Opłata za ${PLANS[key].name}`, price));
       track('sub_grant', { plan: key });
-      toast(`Nadano ${PLANS[key].name}: ${u.name}`, 'good');
+      toast(`Nadano ${PLANS[key].name} (opłata ${fmt(price)}): ${u.name}`, 'good');
     } else if (action === 'revoke') {
       const key = btn.dataset.key;
       await Store.updateUser(u.id, { subs: Object.assign({}, u.subs, { [key]: false }) });
