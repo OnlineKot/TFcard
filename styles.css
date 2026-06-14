@@ -218,3 +218,50 @@ body {
 .ios-install-card ol { padding-left: 20px; display: flex; flex-direction: column; gap: 8px; font-size: 14px; }
 .ios-close { position: absolute; top: 16px; right: 16px; background: var(--card-2); border: none; color: var(--txt); width: 32px; height: 32px; border-radius: 50%; font-size: 14px; cursor: pointer; }
 .share-ico { display: inline-block; }
+
+/* =================== RESPONSYWNOŚĆ =================== */
+/* Tablet / desktop: wyśrodkowana zawartość, pływająca nawigacja, większe akcje */
+@media (min-width: 720px) {
+  body { background: radial-gradient(1400px 800px at 50% -10%, #1a2347 0%, transparent 55%), var(--bg); }
+  .view-container { max-width: 840px; padding: 32px 24px 140px; }
+  .actions-row { gap: 42px; }
+  .action .circle { width: 62px; height: 62px; font-size: 24px; }
+  .balance-amount { font-size: 50px; }
+  .bankcard { max-width: 480px; margin-left: auto; margin-right: auto; }
+  .bottom-nav {
+    left: 50%; right: auto; transform: translateX(-50%);
+    width: min(560px, calc(100% - 32px));
+    bottom: 16px; border-radius: 22px; border: 1px solid var(--line); box-shadow: var(--shadow);
+  }
+  .admin-container, #admin-container { }
+}
+
+/* Duży ekran: panel admina w dwóch kolumnach */
+@media (min-width: 980px) {
+  .view-container { max-width: 960px; }
+  #admin-users { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; align-items: start; }
+  #admin-users .admin-user { margin-bottom: 0; }
+  .plan { max-width: 100%; }
+}
+
+/* Bardzo szeroki ekran */
+@media (min-width: 1300px) {
+  .view-container { max-width: 1040px; }
+}
+
+/* Efekty wskaźnika (mysz) — nie dotykają telefonów */
+@media (hover: hover) {
+  .mini:hover, .more-item:hover, .tile:hover, .plan:hover { border-color: var(--accent); }
+  .action:hover .circle { background: var(--line); }
+  .nav-item:hover { color: var(--txt); }
+  .btn:hover { filter: brightness(1.07); }
+  .tx:hover { background: rgba(255, 255, 255, .02); }
+}
+
+/* Bezpieczne łamanie długich elementów na wąskich telefonach */
+@media (max-width: 360px) {
+  .balance-amount { font-size: 38px; }
+  .key { width: 70px; height: 70px; font-size: 26px; }
+  .keypad { grid-template-columns: repeat(3, 70px); gap: 14px; }
+  .nav-item span:last-child { font-size: 9px; }
+}

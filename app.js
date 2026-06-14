@@ -203,7 +203,7 @@ function showApp() {
 }
 
 /* Podświetlenie w dolnej nawigacji dla widoków podrzędnych (np. „Więcej") */
-const NAV_FOR = { home: 'home', pay: 'pay', qr: 'pay', teo: 'teo', cards: 'cards', more: 'more', subs: 'more', savings: 'more', profile: 'more', stats: 'more', debt: 'more', rewards: 'teo' };
+const NAV_FOR = { home: 'home', pay: 'pay', qr: 'pay', teo: 'teo', cards: 'cards', more: 'more', subs: 'more', savings: 'more', profile: 'more', stats: 'more', debt: 'more' };
 
 function navTo(view) {
   activeView = view;
@@ -230,7 +230,7 @@ function render() {
   const u = currentUser(); if (!u) return;
   const views = {
     home: viewHome, pay: viewPay, cards: viewCards, subs: viewSubs,
-    teo: viewTeo, rewards: viewRewards, more: viewMore, savings: viewSavings,
+    teo: viewTeo, more: viewMore, savings: viewSavings,
     profile: viewProfile, stats: viewStats, debt: viewDebt, qr: viewQr,
   };
   const c = document.getElementById('view-container');
@@ -243,7 +243,7 @@ function render() {
   }
   const wires = {
     home: wireHome, pay: wirePay, cards: wireCards, subs: wireSubs,
-    teo: wireTeo, rewards: wireRewards, more: wireMore, savings: wireSavings,
+    teo: wireTeo, more: wireMore, savings: wireSavings,
     profile: wireProfile, debt: wireDebt, qr: wireQr,
   };
   if (wires[activeView]) wires[activeView](u);
@@ -495,7 +495,7 @@ function viewSubs(u) {
 
 function wireSubs() { /* brak akcji użytkownika — subskrypcje nadaje admin */ }
 
-/* ---------- TEOpoints (przyznaje WYŁĄCZNIE admin) + sklep nagród ---------- */
+/* ---------- TEOpoints (punkty i zakupy przyznaje WYŁĄCZNIE admin) ---------- */
 const REWARDS = [
   { id: 'r1', name: 'Kawa na koszt TF', cost: 50, icon: '☕' },
   { id: 'r2', name: 'Zwrot 10 zł na konto', cost: 200, icon: '💵', cash: 10 },
@@ -505,7 +505,16 @@ const REWARDS = [
 ];
 
 function viewTeo(u) {
-  const txs = txArr(u).filter(t => t.type === 'teo_in' || t.type === 'teo_out');
+  const history = txArr(u).filter(t => t.type === 'teo_in' || t.type === 'teo_out');
+  const purchases = txArr(u).filter(t => t.type === 'teo_out');
+  const purchasesHTML = purchases.length
+    ? `<div class="tx-list">` + purchases.map(t => `
+        <div class="tx">
+          <div class="tx-ico">🎁</div>
+          <div class="tx-main"><div class="tx-title">${esc(t.title)}</div><div class="tx-sub">${fmtDate(t.ts)}</div></div>
+          <div class="tx-amt">${t.amount} 💎</div>
+        </div>`).join('') + `</div>`
+    : `<div class="empty">Nic jeszcze nie kupiono</div>`;
   return `
     <div class="greeting">TEOpoints 💎</div>
     <div class="greeting-sub">Program lojalnościowy TF CARD</div>
@@ -514,42 +523,14 @@ function viewTeo(u) {
       <div><div class="bankcard-balance-label">Twoje punkty</div><div class="bankcard-balance">${num(u.teo)} 💎</div></div>
       <div class="bankcard-bottom"><span>${esc(u.name.toUpperCase())}</span><span>TF&nbsp;LOYALTY</span></div>
     </div>
-    <div class="actions-row">
-      <div class="action" data-go="rewards"><div class="circle">🎁</div><span>Sklep nagród</span></div>
-      <div class="action" data-go="home"><div class="circle">🏠</div><span>Pulpit</span></div>
-    </div>
-    <p class="center muted" style="font-size:12px">Punkty TEOpoints przyznaje wyłącznie administrator.</p>
+    <p class="center muted" style="font-size:12px;margin-top:6px">Punkty i zakupy przyznaje wyłącznie administrator.</p>
+    <div class="section-title">Twoje zakupy</div>
+    <div class="card">${purchasesHTML}</div>
     <div class="section-title">Historia punktów</div>
-    <div class="card">${txListHTML(txs)}</div>`;
+    <div class="card">${txListHTML(history)}</div>`;
 }
 function wireTeo() {
   document.querySelectorAll('[data-go]').forEach(el => el.addEventListener('click', () => navTo(el.dataset.go)));
-}
-
-function viewRewards(u) {
-  const items = REWARDS.map(r => `
-    <div class="tx">
-      <div class="tx-ico">${r.icon}</div>
-      <div class="tx-main"><div class="tx-title">${esc(r.name)}</div><div class="tx-sub">${r.cost} 💎${r.cash ? ` • +${fmt(r.cash)}` : ''}</div></div>
-      <button class="btn btn-primary btn-sm" data-reward="${r.id}" ${num(u.teo) < r.cost ? 'disabled' : ''}>Odbierz</button>
-    </div>`).join('');
-  return `
-    <div class="greeting">Sklep nagród 🎁</div>
-    <div class="greeting-sub">Masz: <b>${num(u.teo)} 💎</b></div>
-    <div class="card">${items}</div>`;
-}
-function wireRewards(u) {
-  document.querySelectorAll('[data-reward]').forEach(b => b.addEventListener('click', async () => {
-    const r = REWARDS.find(x => x.id === b.dataset.reward);
-    if (!r || num(u.teo) < r.cost) return toast('Za mało punktów', 'bad');
-    const patch = { teo: num(u.teo) - r.cost };
-    if (r.cash) patch.balance = num(u.balance) + r.cash;
-    await Store.updateUser(u.id, patch);
-    await Store.pushTx(u.id, mkTx('teo_out', `Nagroda: ${r.name}`, r.cost));
-    if (r.cash) await Store.pushTx(u.id, mkTx('in', `Zwrot za nagrodę: ${r.name}`, r.cash));
-    track('reward_redeem', { reward: r.id });
-    toast(`Odebrano: ${r.name} 🎉`, 'good'); render();
-  }));
 }
 
 /* ---------- Skarbonka (oszczędności) ---------- */
@@ -755,6 +736,10 @@ function renderAdmin() {
         <button class="btn btn-danger btn-sm" data-adm="teo-sub">Zabierz</button>
       </div>
       <div class="admin-actions">
+        <select class="adm-buy">${REWARDS.map(r => `<option value="${r.id}">${r.icon} ${r.name} • ${r.cost}💎${r.cash ? ` (+${fmt(r.cash)})` : ''}</option>`).join('')}</select>
+        <button class="btn btn-good btn-sm" data-adm="buy">Przyznaj zakup</button>
+      </div>
+      <div class="admin-actions">
         <input type="number" class="adm-debt" placeholder="Dług zł" style="max-width:90px" />
         <button class="btn btn-danger btn-sm" data-adm="debt-add">Nadaj dług</button>
         <button class="btn btn-good btn-sm" data-adm="debt-sub">Umorz dług</button>
@@ -893,6 +878,17 @@ function wireAdmin() {
         await Store.pushTx(u.id, mkTx('teo_out', 'Korekta TEOpoints (admin)', amt));
         toast(`Zabrano ${amt} 💎 od ${u.name}`, 'good');
       }
+    } else if (action === 'buy') {
+      const r = REWARDS.find(x => x.id === wrap.querySelector('.adm-buy').value);
+      if (!r) return;
+      if (num(u.teo) < r.cost) return toast(`${u.name} ma za mało punktów (${num(u.teo)}/${r.cost})`, 'bad');
+      const patch = { teo: num(u.teo) - r.cost };
+      if (r.cash) patch.balance = num(u.balance) + r.cash;
+      await Store.updateUser(u.id, patch);
+      await Store.pushTx(u.id, mkTx('teo_out', `Zakup: ${r.name}`, r.cost));
+      if (r.cash) await Store.pushTx(u.id, mkTx('in', `Zwrot za zakup: ${r.name}`, r.cash));
+      track('purchase_grant', { reward: r.id });
+      toast(`Przyznano zakup „${r.name}" dla ${u.name}`, 'good');
     } else if (action === 'debt-add' || action === 'debt-sub') {
       const amt = parseFloat(wrap.querySelector('.adm-debt').value);
       if (!amt || amt <= 0) return toast('Podaj kwotę', 'bad');
