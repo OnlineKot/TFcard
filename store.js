@@ -26,6 +26,7 @@ function blankUser(name, pin, opts = {}) {
     goalName: '', goalTarget: 0, cafeAccess: false,
     birthday: opts.birthday || '', bdayYear: 0,
     subs: { plus: !!opts.plus, pro: !!opts.pro },
+    subPaid: { plus: opts.plus ? Date.now() : 0, pro: opts.pro ? Date.now() : 0 },
     cardNumber: genCard(), createdAt: Date.now(), transactions: {},
   };
 }
