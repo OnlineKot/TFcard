@@ -188,6 +188,8 @@ body {
 .stat { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 14px; }
 .stat-val { font-size: 20px; font-weight: 800; }
 .stat-label { font-size: 11px; color: var(--muted); margin-top: 2px; }
+.admin-search { width: 100%; background: var(--bg-2); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; color: var(--txt); font-size: 15px; outline: none; margin-bottom: 12px; }
+.admin-search:focus { border-color: var(--accent); }
 .admin-user { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 15px; margin-bottom: 11px; }
 .admin-user-top { display: flex; justify-content: space-between; align-items: flex-start; }
 .admin-user-name { font-weight: 700; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }

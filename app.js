@@ -282,20 +282,21 @@ function viewHome(u) {
       </div>
     </div>
     <div class="balance-block">
-      <div class="balance-label">Cześć, ${esc(u.name.split(' ')[0])} 👋</div>
+      <div class="balance-label">Cześć, ${esc(u.name.split(' ')[0])} 👋 • ${new Date().toLocaleDateString('pl-PL', { weekday: 'long', day: 'numeric', month: 'long' })}</div>
       <div class="balance-amount">${fmt(u.balance)}</div>
       ${(u.frozen) ? '<div class="badge gold" style="margin-top:6px;display:inline-block">❄️ Karta zamrożona</div>' : ''}
     </div>
+    <div class="actions-row">
+      <div class="action" data-go="pay"><div class="circle">💸</div><span>Wyślij</span></div>
+      <div class="action" data-go="qr"><div class="circle">📷</div><span>QR</span></div>
+      <div class="action" data-go="teo"><div class="circle">💎</div><span>TEOpoints</span></div>
+      <div class="action" data-go="more"><div class="circle">⋯</div><span>Więcej</span></div>
+    </div>
+    ${bankCardHTML(u)}
     <div class="mini-row">
       <div class="mini" data-go="teo"><span>💎 TEOpoints</span><b>${num(u.teo)}</b></div>
       <div class="mini" data-go="savings"><span>🏦 Skarbonka</span><b>${fmt(u.savings)}</b></div>
       ${num(u.debt) > 0 ? `<div class="mini debt" data-go="debt"><span>📉 Dług</span><b>${fmt(u.debt)}</b></div>` : ''}
-    </div>
-    <div class="actions-row">
-      <div class="action" data-go="pay"><div class="circle">💸</div><span>Wyślij</span></div>
-      <div class="action" data-go="savings"><div class="circle">🏦</div><span>Skarbonka</span></div>
-      <div class="action" data-go="teo"><div class="circle">💎</div><span>TEO</span></div>
-      <div class="action" data-go="more"><div class="circle">⋯</div><span>Więcej</span></div>
     </div>
     <div class="section-title">Ostatnie transakcje</div>
     <div class="card">${txListHTML(txs)}</div>`;
@@ -307,7 +308,7 @@ function txListHTML(txs) {
   return `<div class="tx-list">` + txs.map(t => {
     const isIn = t.type === 'in' || t.type === 'teo_in' || t.type === 'unsave';
     const isTeo = t.type === 'teo_in' || t.type === 'teo_out';
-    const val = isTeo ? `${t.amount} TEO` : fmt(t.amount);
+    const val = isTeo ? `${t.amount} TEOpoints` : fmt(t.amount);
     return `<div class="tx">
       <div class="tx-ico">${TX_ICON[t.type] || '•'}</div>
       <div class="tx-main"><div class="tx-title">${esc(t.title)}</div><div class="tx-sub">${fmtDate(t.ts)}</div></div>
@@ -671,14 +672,14 @@ function viewStats(u) {
     <div class="stat-row">
       <div class="stat"><div class="stat-val">${txs.length}</div><div class="stat-label">Transakcje</div></div>
       <div class="stat"><div class="stat-val">${fmt(u.balance)}</div><div class="stat-label">Saldo</div></div>
-      <div class="stat"><div class="stat-val">${num(u.teo)}💎</div><div class="stat-label">TEO</div></div>
+      <div class="stat"><div class="stat-val">${num(u.teo)}💎</div><div class="stat-label">TEOpoints</div></div>
     </div>
     <div class="section-title">Przepływy</div>
     <div class="card">
       <div class="tx"><div class="tx-ico">⬇️</div><div class="tx-main"><div class="tx-title">Wpływy</div></div><div class="tx-amt in">+${fmt(inMoney)}</div></div>
       <div class="tx"><div class="tx-ico">⬆️</div><div class="tx-main"><div class="tx-title">Wydatki</div></div><div class="tx-amt">−${fmt(outMoney)}</div></div>
-      <div class="tx"><div class="tx-ico">💎</div><div class="tx-main"><div class="tx-title">Zdobyte TEO</div></div><div class="tx-amt in">+${teoIn}</div></div>
-      <div class="tx"><div class="tx-ico">🎁</div><div class="tx-main"><div class="tx-title">Wydane TEO</div></div><div class="tx-amt">−${teoOut}</div></div>
+      <div class="tx"><div class="tx-ico">💎</div><div class="tx-main"><div class="tx-title">Zdobyte TEOpoints</div></div><div class="tx-amt in">+${teoIn}</div></div>
+      <div class="tx"><div class="tx-ico">🎁</div><div class="tx-main"><div class="tx-title">Wydane TEOpoints</div></div><div class="tx-amt">−${teoOut}</div></div>
     </div>`;
 }
 
@@ -730,7 +731,7 @@ function renderAdmin() {
     : `<button class="btn btn-good btn-sm" data-adm="give" data-key="${key}">Nadaj ${PLANS[key].tier} • ${fmt(PLANS[key].price)}/mc</button>`;
 
   const usersHTML = users.map(u => `
-    <div class="admin-user" data-uid="${u.id}">
+    <div class="admin-user" data-uid="${u.id}" data-name="${esc(u.name.toLowerCase())}">
       <div class="admin-user-top">
         <div>
           <div class="admin-user-name">${esc(u.name)}
@@ -739,7 +740,7 @@ function renderAdmin() {
             ${!hasSub(u, 'plus') && !hasSub(u, 'pro') ? '<span class="badge active-badge">STANDARD</span>' : ''}
           </div>
           <div class="admin-user-meta">PIN: <b>${esc(u.pin)}</b> • Saldo: <b>${fmt(u.balance)}</b> • Transakcje: ${Object.keys(u.transactions || {}).length}</div>
-          <div class="admin-user-meta">💎 ${num(u.teo)} TEO • 🏦 ${fmt(u.savings)} • 📉 ${fmt(u.debt)}${u.frozen ? ' • ❄️ zamrożona' : ''}</div>
+          <div class="admin-user-meta">💎 ${num(u.teo)} TEOpoints • 🏦 ${fmt(u.savings)} • 📉 ${fmt(u.debt)}${u.frozen ? ' • ❄️ zamrożona' : ''}</div>
           <div class="admin-user-meta">${esc(u.cardNumber)}</div>
         </div>
       </div>
@@ -749,9 +750,9 @@ function renderAdmin() {
         <button class="btn btn-danger btn-sm" data-adm="debit">Obciąż</button>
       </div>
       <div class="admin-actions">
-        <input type="number" class="adm-teo" placeholder="TEO 💎" style="max-width:90px" />
-        <button class="btn btn-good btn-sm" data-adm="teo-add">Dodaj TEO</button>
-        <button class="btn btn-danger btn-sm" data-adm="teo-sub">Zabierz TEO</button>
+        <input type="number" class="adm-teo" placeholder="TEOpoints 💎" style="max-width:120px" />
+        <button class="btn btn-good btn-sm" data-adm="teo-add">Dodaj TEOpoints</button>
+        <button class="btn btn-danger btn-sm" data-adm="teo-sub">Zabierz</button>
       </div>
       <div class="admin-actions">
         <input type="number" class="adm-debt" placeholder="Dług zł" style="max-width:90px" />
@@ -819,14 +820,23 @@ function renderAdmin() {
       </div>
     </div>
 
-    <div class="section-title">Użytkownicy</div>
-    ${usersHTML || '<div class="empty">Brak kont</div>'}`;
+    <div class="section-title">Użytkownicy (${users.length})</div>
+    ${users.length ? '<input type="text" id="admin-search" class="admin-search" placeholder="🔎 Szukaj po imieniu…" />' : ''}
+    <div id="admin-users">${usersHTML || '<div class="empty">Brak kont — utwórz w Kreatorze kont</div>'}</div>`;
 
   wireAdmin();
 }
 
 function wireAdmin() {
   document.getElementById('admin-logout').addEventListener('click', doLogout);
+
+  const search = document.getElementById('admin-search');
+  if (search) search.addEventListener('input', () => {
+    const q = search.value.trim().toLowerCase();
+    document.querySelectorAll('#admin-users .admin-user').forEach(el => {
+      el.style.display = el.dataset.name.includes(q) ? '' : 'none';
+    });
+  });
 
   document.getElementById('add-user').addEventListener('click', async () => {
     const name = document.getElementById('new-name').value.trim();
