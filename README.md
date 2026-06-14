@@ -17,6 +17,13 @@ Dane synchronizują się między telefonami przez **Firebase**.
   (39,99 zł/mc) jako **dwie niezależne subskrypcje** (można mieć każdą osobno).
   **Nadaje je administrator** — użytkownik wysyła prośbę, admin zatwierdza
   jednym kliknięciem
+- **TEOpoints 💎** — program lojalnościowy; punkty przyznaje **wyłącznie
+  administrator** (nie automat). Użytkownik widzi saldo, historię i może je
+  wymieniać w **sklepie nagród**
+- **Skarbonka 🏦** — odkładanie środków na bok (wpłata/wypłata)
+- **Dług 📉** — admin nadaje zadłużenie, użytkownik je spłaca z konta
+- **Zamrażanie karty ❄️**, **profil** ze zmianą PIN-u, **statystyki** konta,
+  menu **„Więcej"** z wszystkimi funkcjami
 - **Ulepszalna** — nowe wersje aplikacji wdrażają się i aktualizują
   automatycznie (service worker z auto-update)
 - **PWA** — działa offline, instaluje się na ekran początkowy (iPhone/Android)

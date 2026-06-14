@@ -26,6 +26,7 @@ let pinBuf = '';
 
 /* ---------- pomocnicze ---------- */
 const fmt = (n) => new Intl.NumberFormat('pl-PL', { style: 'currency', currency: 'PLN' }).format(Number(n) || 0);
+const num = (n) => Number(n) || 0;
 const fmtDate = (ts) => new Date(ts).toLocaleDateString('pl-PL', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
 const esc = (s) => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const txArr = (u) => Object.values(u.transactions || {}).sort((a, b) => b.ts - a.ts);
@@ -183,12 +184,20 @@ function showApp() {
   document.getElementById('app-screen').classList.remove('hidden');
 }
 
+/* Podświetlenie w dolnej nawigacji dla widoków podrzędnych (np. „Więcej") */
+const NAV_FOR = { home: 'home', pay: 'pay', teo: 'teo', cards: 'cards', more: 'more', subs: 'more', savings: 'more', profile: 'more', stats: 'more', debt: 'more', rewards: 'teo' };
+
+function navTo(view) {
+  activeView = view;
+  const navKey = NAV_FOR[view] || 'more';
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.toggle('active', n.dataset.view === navKey));
+  render();
+}
+
 function setupNav() {
   document.querySelector('.bottom-nav').addEventListener('click', (e) => {
     const item = e.target.closest('.nav-item'); if (!item) return;
-    activeView = item.dataset.view;
-    document.querySelectorAll('.nav-item').forEach(n => n.classList.toggle('active', n.dataset.view === activeView));
-    routeRender();
+    navTo(item.dataset.view);
   });
 }
 
@@ -201,10 +210,24 @@ function routeRender() {
 
 function render() {
   const u = currentUser(); if (!u) return;
-  const views = { home: viewHome, pay: viewPay, cards: viewCards, subs: viewSubs };
+  const views = {
+    home: viewHome, pay: viewPay, cards: viewCards, subs: viewSubs,
+    teo: viewTeo, rewards: viewRewards, more: viewMore, savings: viewSavings,
+    profile: viewProfile, stats: viewStats, debt: viewDebt,
+  };
   const c = document.getElementById('view-container');
-  c.innerHTML = `<div class="fade-in">${(views[activeView] || viewHome)(u)}</div>`;
-  const wires = { home: wireHome, pay: wirePay, cards: wireCards, subs: wireSubs };
+  try {
+    c.innerHTML = `<div class="fade-in">${(views[activeView] || viewHome)(u)}</div>`;
+  } catch (e) {
+    console.error(e);
+    c.innerHTML = `<div class="empty">Błąd widoku. Spróbuj ponownie.</div>`;
+    return;
+  }
+  const wires = {
+    home: wireHome, pay: wirePay, cards: wireCards, subs: wireSubs,
+    teo: wireTeo, rewards: wireRewards, more: wireMore, savings: wireSavings,
+    profile: wireProfile, debt: wireDebt,
+  };
   if (wires[activeView]) wires[activeView](u);
   window.scrollTo(0, 0);
 }
@@ -243,34 +266,40 @@ function viewHome(u) {
     <div class="balance-block">
       <div class="balance-label">Cześć, ${esc(u.name.split(' ')[0])} 👋</div>
       <div class="balance-amount">${fmt(u.balance)}</div>
+      ${(u.frozen) ? '<div class="badge gold" style="margin-top:6px;display:inline-block">❄️ Karta zamrożona</div>' : ''}
+    </div>
+    <div class="mini-row">
+      <div class="mini" data-go="teo"><span>💎 TEOpoints</span><b>${num(u.teo)}</b></div>
+      <div class="mini" data-go="savings"><span>🏦 Skarbonka</span><b>${fmt(u.savings)}</b></div>
+      ${num(u.debt) > 0 ? `<div class="mini debt" data-go="debt"><span>📉 Dług</span><b>${fmt(u.debt)}</b></div>` : ''}
     </div>
     <div class="actions-row">
       <div class="action" data-go="pay"><div class="circle">💸</div><span>Wyślij</span></div>
-      <div class="action" data-go="cards"><div class="circle">💳</div><span>Karty</span></div>
-      <div class="action" data-go="subs"><div class="circle">⭐</div><span>Plany</span></div>
+      <div class="action" data-go="savings"><div class="circle">🏦</div><span>Skarbonka</span></div>
+      <div class="action" data-go="teo"><div class="circle">💎</div><span>TEO</span></div>
+      <div class="action" data-go="more"><div class="circle">⋯</div><span>Więcej</span></div>
     </div>
     <div class="section-title">Ostatnie transakcje</div>
     <div class="card">${txListHTML(txs)}</div>`;
 }
 
+const TX_ICON = { in: '⬇️', out: '⬆️', teo_in: '💎', teo_out: '🎁', save: '🏦', unsave: '🏦' };
 function txListHTML(txs) {
   if (!txs.length) return `<div class="empty">Brak transakcji</div>`;
   return `<div class="tx-list">` + txs.map(t => {
-    const isIn = t.type === 'in';
+    const isIn = t.type === 'in' || t.type === 'teo_in' || t.type === 'unsave';
+    const isTeo = t.type === 'teo_in' || t.type === 'teo_out';
+    const val = isTeo ? `${t.amount} TEO` : fmt(t.amount);
     return `<div class="tx">
-      <div class="tx-ico">${isIn ? '⬇️' : '⬆️'}</div>
+      <div class="tx-ico">${TX_ICON[t.type] || '•'}</div>
       <div class="tx-main"><div class="tx-title">${esc(t.title)}</div><div class="tx-sub">${fmtDate(t.ts)}</div></div>
-      <div class="tx-amt ${isIn ? 'in' : ''}">${isIn ? '+' : '−'}${fmt(t.amount)}</div>
+      <div class="tx-amt ${isIn ? 'in' : ''}">${isIn ? '+' : '−'}${val}</div>
     </div>`;
   }).join('') + `</div>`;
 }
 
 function wireHome() {
-  document.querySelectorAll('[data-go]').forEach(el => el.addEventListener('click', () => {
-    activeView = el.dataset.go;
-    document.querySelectorAll('.nav-item').forEach(n => n.classList.toggle('active', n.dataset.view === activeView));
-    render();
-  }));
+  document.querySelectorAll('[data-go]').forEach(el => el.addEventListener('click', () => navTo(el.dataset.go)));
   document.getElementById('logout-btn').addEventListener('click', doLogout);
   document.getElementById('install-btn').addEventListener('click', showInstall);
 }
@@ -282,15 +311,17 @@ function viewPay(u) {
   const opts = others.length
     ? others.map(o => `<option value="${o.id}">${esc(o.name)}</option>`).join('')
     : `<option value="">(brak innych kont)</option>`;
+  const frozen = !!u.frozen;
   return `
     <div class="greeting">TF PAY ⚡</div>
     <div class="greeting-sub">Saldo: <b>${fmt(u.balance)}</b></div>
+    ${frozen ? '<div class="card" style="border-color:var(--gold);margin-bottom:14px">❄️ Karta jest zamrożona — przelewy zablokowane. Odmroź ją w zakładce Karty.</div>' : ''}
     <div class="section-title">Przelew do innego konta TF CARD</div>
     <div class="card">
-      <div class="field"><label>Odbiorca</label><select id="pay-to" ${others.length ? '' : 'disabled'}>${opts}</select></div>
-      <div class="field"><label>Kwota (PLN)</label><input type="number" id="pay-amount" min="0.01" step="0.01" placeholder="0,00" /></div>
-      <div class="field"><label>Tytuł</label><input type="text" id="pay-title" placeholder="Za kawę ☕" /></div>
-      <button class="btn btn-primary btn-block" id="pay-send" ${others.length ? '' : 'disabled'}>Wyślij przelew</button>
+      <div class="field"><label>Odbiorca</label><select id="pay-to" ${others.length && !frozen ? '' : 'disabled'}>${opts}</select></div>
+      <div class="field"><label>Kwota (PLN)</label><input type="number" id="pay-amount" min="0.01" step="0.01" placeholder="0,00" ${frozen ? 'disabled' : ''} /></div>
+      <div class="field"><label>Tytuł</label><input type="text" id="pay-title" placeholder="Za kawę ☕" ${frozen ? 'disabled' : ''} /></div>
+      <button class="btn btn-primary btn-block" id="pay-send" ${others.length && !frozen ? '' : 'disabled'}>Wyślij przelew</button>
     </div>
     <div class="section-title">Historia</div>
     <div class="card">${txListHTML(txs)}</div>`;
@@ -298,6 +329,7 @@ function viewPay(u) {
 
 function wirePay(u) {
   document.getElementById('pay-send').addEventListener('click', async () => {
+    if (u.frozen) return toast('Karta zamrożona', 'bad');
     const toId = document.getElementById('pay-to').value;
     const amount = parseFloat(document.getElementById('pay-amount').value);
     const title = document.getElementById('pay-title').value.trim() || 'Przelew TF PAY';
@@ -330,14 +362,22 @@ function viewCards(u) {
       <div class="tx"><div class="tx-main"><div class="tx-title">Ważna do</div></div><div>12/29</div></div>
       <div class="tx"><div class="tx-main"><div class="tx-title">CVV</div></div><div>•••</div></div>
       <div class="tx"><div class="tx-main"><div class="tx-title">Subskrypcje</div></div><div>${esc(subLabel(u))}</div></div>
+      <div class="tx"><div class="tx-main"><div class="tx-title">Status</div></div><div>${u.frozen ? '❄️ Zamrożona' : '✅ Aktywna'}</div></div>
     </div>
-    <div class="mt"><button class="btn btn-ghost btn-block" id="card-regen">Wygeneruj nowy numer karty</button></div>`;
+    <div class="row-2 mt">
+      <button class="btn ${u.frozen ? 'btn-good' : 'btn-ghost'}" id="card-freeze">${u.frozen ? 'Odmroź kartę' : '❄️ Zamroź kartę'}</button>
+      <button class="btn btn-ghost" id="card-regen">Nowy numer</button>
+    </div>`;
 }
 
 function wireCards(u) {
   document.getElementById('card-regen').addEventListener('click', async () => {
     await Store.updateUser(u.id, { cardNumber: Store.newCard() });
     toast('Wygenerowano nowy numer karty', 'good'); render();
+  });
+  document.getElementById('card-freeze').addEventListener('click', async () => {
+    await Store.updateUser(u.id, { frozen: !u.frozen });
+    toast(u.frozen ? 'Karta odmrożona' : 'Karta zamrożona ❄️', 'good'); render();
   });
 }
 
@@ -372,6 +412,221 @@ function viewSubs(u) {
 
 function wireSubs() { /* brak akcji użytkownika — subskrypcje nadaje admin */ }
 
+/* ---------- TEOpoints (przyznaje WYŁĄCZNIE admin) + sklep nagród ---------- */
+const REWARDS = [
+  { id: 'r1', name: 'Kawa na koszt TF', cost: 50, icon: '☕' },
+  { id: 'r2', name: 'Zwrot 10 zł na konto', cost: 200, icon: '💵', cash: 10 },
+  { id: 'r3', name: 'Naklejki TF CARD', cost: 80, icon: '🏷️' },
+  { id: 'r4', name: 'Bilet do kina', cost: 500, icon: '🎬' },
+  { id: 'r5', name: 'Zwrot 50 zł na konto', cost: 900, icon: '💰', cash: 50 },
+];
+
+function viewTeo(u) {
+  const txs = txArr(u).filter(t => t.type === 'teo_in' || t.type === 'teo_out');
+  return `
+    <div class="greeting">TEOpoints 💎</div>
+    <div class="greeting-sub">Program lojalnościowy TF CARD</div>
+    <div class="bankcard pro">
+      <div class="bankcard-top"><div class="bankcard-tier">TEOPOINTS</div><div class="bankcard-chip"></div></div>
+      <div><div class="bankcard-balance-label">Twoje punkty</div><div class="bankcard-balance">${num(u.teo)} 💎</div></div>
+      <div class="bankcard-bottom"><span>${esc(u.name.toUpperCase())}</span><span>TF&nbsp;LOYALTY</span></div>
+    </div>
+    <div class="actions-row">
+      <div class="action" data-go="rewards"><div class="circle">🎁</div><span>Sklep nagród</span></div>
+      <div class="action" data-go="home"><div class="circle">🏠</div><span>Pulpit</span></div>
+    </div>
+    <p class="center muted" style="font-size:12px">Punkty TEOpoints przyznaje wyłącznie administrator.</p>
+    <div class="section-title">Historia punktów</div>
+    <div class="card">${txListHTML(txs)}</div>`;
+}
+function wireTeo() {
+  document.querySelectorAll('[data-go]').forEach(el => el.addEventListener('click', () => navTo(el.dataset.go)));
+}
+
+function viewRewards(u) {
+  const items = REWARDS.map(r => `
+    <div class="tx">
+      <div class="tx-ico">${r.icon}</div>
+      <div class="tx-main"><div class="tx-title">${esc(r.name)}</div><div class="tx-sub">${r.cost} 💎${r.cash ? ` • +${fmt(r.cash)}` : ''}</div></div>
+      <button class="btn btn-primary btn-sm" data-reward="${r.id}" ${num(u.teo) < r.cost ? 'disabled' : ''}>Odbierz</button>
+    </div>`).join('');
+  return `
+    <div class="greeting">Sklep nagród 🎁</div>
+    <div class="greeting-sub">Masz: <b>${num(u.teo)} 💎</b></div>
+    <div class="card">${items}</div>`;
+}
+function wireRewards(u) {
+  document.querySelectorAll('[data-reward]').forEach(b => b.addEventListener('click', async () => {
+    const r = REWARDS.find(x => x.id === b.dataset.reward);
+    if (!r || num(u.teo) < r.cost) return toast('Za mało punktów', 'bad');
+    const patch = { teo: num(u.teo) - r.cost };
+    if (r.cash) patch.balance = num(u.balance) + r.cash;
+    await Store.updateUser(u.id, patch);
+    await Store.pushTx(u.id, mkTx('teo_out', `Nagroda: ${r.name}`, r.cost));
+    if (r.cash) await Store.pushTx(u.id, mkTx('in', `Zwrot za nagrodę: ${r.name}`, r.cash));
+    track('reward_redeem', { reward: r.id });
+    toast(`Odebrano: ${r.name} 🎉`, 'good'); render();
+  }));
+}
+
+/* ---------- Skarbonka (oszczędności) ---------- */
+function viewSavings(u) {
+  const txs = txArr(u).filter(t => t.type === 'save' || t.type === 'unsave');
+  return `
+    <div class="greeting">Skarbonka 🏦</div>
+    <div class="greeting-sub">Odkładaj środki na bok</div>
+    <div class="row-2">
+      <div class="stat"><div class="stat-val">${fmt(u.savings)}</div><div class="stat-label">W skarbonce</div></div>
+      <div class="stat"><div class="stat-val">${fmt(u.balance)}</div><div class="stat-label">Na koncie</div></div>
+    </div>
+    <div class="section-title">Przenieś środki</div>
+    <div class="card">
+      <div class="field"><label>Kwota (PLN)</label><input type="number" id="sav-amount" min="0.01" step="0.01" placeholder="0,00" /></div>
+      <div class="row-2">
+        <button class="btn btn-primary" id="sav-in">Wpłać do skarbonki</button>
+        <button class="btn btn-ghost" id="sav-out">Wypłać na konto</button>
+      </div>
+    </div>
+    <div class="section-title">Historia</div>
+    <div class="card">${txListHTML(txs)}</div>`;
+}
+function wireSavings(u) {
+  const amt = () => parseFloat(document.getElementById('sav-amount').value);
+  document.getElementById('sav-in').addEventListener('click', async () => {
+    const a = amt(); if (!a || a <= 0) return toast('Podaj kwotę', 'bad');
+    if (a > num(u.balance)) return toast('Za mało na koncie', 'bad');
+    await Store.updateUser(u.id, { balance: num(u.balance) - a, savings: num(u.savings) + a });
+    await Store.pushTx(u.id, mkTx('save', 'Wpłata do skarbonki', a));
+    toast(`Odłożono ${fmt(a)}`, 'good'); render();
+  });
+  document.getElementById('sav-out').addEventListener('click', async () => {
+    const a = amt(); if (!a || a <= 0) return toast('Podaj kwotę', 'bad');
+    if (a > num(u.savings)) return toast('Za mało w skarbonce', 'bad');
+    await Store.updateUser(u.id, { balance: num(u.balance) + a, savings: num(u.savings) - a });
+    await Store.pushTx(u.id, mkTx('unsave', 'Wypłata ze skarbonki', a));
+    toast(`Wypłacono ${fmt(a)}`, 'good'); render();
+  });
+}
+
+/* ---------- Dług (nadaje admin, użytkownik spłaca) ---------- */
+function viewDebt(u) {
+  const debt = num(u.debt);
+  return `
+    <div class="greeting">Dług 📉</div>
+    <div class="greeting-sub">${debt > 0 ? 'Masz zadłużenie do spłaty' : 'Brak zadłużenia 🎉'}</div>
+    <div class="bankcard" style="background:linear-gradient(135deg,#5c1f2b,#7a1f3a)">
+      <div class="bankcard-top"><div class="bankcard-tier">DŁUG</div><div class="bankcard-chip"></div></div>
+      <div><div class="bankcard-balance-label">Do spłaty</div><div class="bankcard-balance">${fmt(debt)}</div></div>
+      <div class="bankcard-bottom"><span>${esc(u.name.toUpperCase())}</span><span>TF&nbsp;CREDIT</span></div>
+    </div>
+    ${debt > 0 ? `
+    <div class="section-title">Spłać dług z konta</div>
+    <div class="card">
+      <div class="field"><label>Kwota spłaty (PLN)</label><input type="number" id="debt-amount" min="0.01" step="0.01" placeholder="0,00" /></div>
+      <div class="row-2">
+        <button class="btn btn-good" id="debt-pay">Spłać</button>
+        <button class="btn btn-ghost" id="debt-payall">Spłać całość</button>
+      </div>
+    </div>` : ''}
+    <p class="center muted" style="font-size:12px;margin-top:10px">Dług nadaje wyłącznie administrator.</p>`;
+}
+function wireDebt(u) {
+  const pay = async (a) => {
+    if (!a || a <= 0) return toast('Podaj kwotę', 'bad');
+    if (a > num(u.balance)) return toast('Za mało środków na koncie', 'bad');
+    const real = Math.min(a, num(u.debt));
+    await Store.updateUser(u.id, { balance: num(u.balance) - real, debt: num(u.debt) - real });
+    await Store.pushTx(u.id, mkTx('out', 'Spłata długu', real));
+    toast(`Spłacono ${fmt(real)}`, 'good'); render();
+  };
+  const payBtn = document.getElementById('debt-pay');
+  if (payBtn) payBtn.addEventListener('click', () => pay(parseFloat(document.getElementById('debt-amount').value)));
+  const allBtn = document.getElementById('debt-payall');
+  if (allBtn) allBtn.addEventListener('click', () => pay(num(u.debt)));
+}
+
+/* ---------- Profil ---------- */
+function viewProfile(u) {
+  return `
+    <div class="greeting">Profil 👤</div>
+    <div class="greeting-sub">${esc(u.name)}</div>
+    <div class="card">
+      <div class="tx"><div class="tx-main"><div class="tx-title">Imię</div></div><div>${esc(u.name)}</div></div>
+      <div class="tx"><div class="tx-main"><div class="tx-title">Karta</div></div><div>${esc(u.cardNumber)}</div></div>
+      <div class="tx"><div class="tx-main"><div class="tx-title">Subskrypcje</div></div><div>${esc(subLabel(u))}</div></div>
+      <div class="tx"><div class="tx-main"><div class="tx-title">Klient od</div></div><div>${new Date(u.createdAt).toLocaleDateString('pl-PL')}</div></div>
+    </div>
+    <div class="section-title">Zmień swój PIN</div>
+    <div class="card">
+      <div class="field"><label>Nowy PIN (4–8 cyfr)</label><input type="text" id="prof-pin" inputmode="numeric" maxlength="8" placeholder="••••" /></div>
+      <button class="btn btn-primary btn-block" id="prof-save">Zapisz PIN</button>
+    </div>
+    <button class="btn btn-danger btn-block mt" id="prof-logout">Wyloguj</button>`;
+}
+function wireProfile(u) {
+  document.getElementById('prof-save').addEventListener('click', async () => {
+    const pin = document.getElementById('prof-pin').value.trim();
+    if (!/^\d{4,8}$/.test(pin)) return toast('PIN to 4–8 cyfr', 'bad');
+    if (pin === (Store.meta().adminPin || '951852')) return toast('Ten PIN jest zajęty', 'bad');
+    if (Store.users().some(x => x.id !== u.id && x.pin === pin)) return toast('Ten PIN jest zajęty', 'bad');
+    await Store.updateUser(u.id, { pin });
+    toast('Zmieniono PIN', 'good');
+  });
+  document.getElementById('prof-logout').addEventListener('click', doLogout);
+}
+
+/* ---------- Statystyki ---------- */
+function viewStats(u) {
+  const txs = txArr(u);
+  const sum = (pred) => txs.filter(pred).reduce((s, t) => s + num(t.amount), 0);
+  const inMoney = sum(t => t.type === 'in' || t.type === 'unsave');
+  const outMoney = sum(t => t.type === 'out' || t.type === 'save');
+  const teoIn = sum(t => t.type === 'teo_in');
+  const teoOut = sum(t => t.type === 'teo_out');
+  return `
+    <div class="greeting">Statystyki 📊</div>
+    <div class="greeting-sub">Podsumowanie Twojego konta</div>
+    <div class="stat-row">
+      <div class="stat"><div class="stat-val">${txs.length}</div><div class="stat-label">Transakcje</div></div>
+      <div class="stat"><div class="stat-val">${fmt(u.balance)}</div><div class="stat-label">Saldo</div></div>
+      <div class="stat"><div class="stat-val">${num(u.teo)}💎</div><div class="stat-label">TEO</div></div>
+    </div>
+    <div class="section-title">Przepływy</div>
+    <div class="card">
+      <div class="tx"><div class="tx-ico">⬇️</div><div class="tx-main"><div class="tx-title">Wpływy</div></div><div class="tx-amt in">+${fmt(inMoney)}</div></div>
+      <div class="tx"><div class="tx-ico">⬆️</div><div class="tx-main"><div class="tx-title">Wydatki</div></div><div class="tx-amt">−${fmt(outMoney)}</div></div>
+      <div class="tx"><div class="tx-ico">💎</div><div class="tx-main"><div class="tx-title">Zdobyte TEO</div></div><div class="tx-amt in">+${teoIn}</div></div>
+      <div class="tx"><div class="tx-ico">🎁</div><div class="tx-main"><div class="tx-title">Wydane TEO</div></div><div class="tx-amt">−${teoOut}</div></div>
+    </div>`;
+}
+
+/* ---------- Więcej (menu funkcji) ---------- */
+function viewMore(u) {
+  const item = (view, ico, label, sub) => `
+    <div class="more-item" data-go="${view}">
+      <div class="more-ico">${ico}</div>
+      <div class="more-main"><div class="more-label">${label}</div><div class="more-sub">${sub}</div></div>
+      <div class="more-arrow">›</div>
+    </div>`;
+  return `
+    <div class="greeting">Więcej ⋯</div>
+    <div class="greeting-sub">Wszystkie funkcje TF CARD</div>
+    <div class="card" style="padding:6px 12px">
+      ${item('subs', '⭐', 'Subskrypcje', 'PLUS i PRO')}
+      ${item('savings', '🏦', 'Skarbonka', `${fmt(u.savings)} odłożone`)}
+      ${item('teo', '💎', 'TEOpoints', `${num(u.teo)} punktów`)}
+      ${item('debt', '📉', 'Dług', num(u.debt) > 0 ? fmt(u.debt) + ' do spłaty' : 'brak')}
+      ${item('stats', '📊', 'Statystyki', 'podsumowanie konta')}
+      ${item('cards', '💳', 'Karty', u.frozen ? 'zamrożona' : 'aktywna')}
+      ${item('profile', '👤', 'Profil', 'dane i PIN')}
+    </div>
+    <button class="btn btn-danger btn-block mt" id="more-logout">Wyloguj</button>`;
+}
+function wireMore() {
+  document.querySelectorAll('[data-go]').forEach(el => el.addEventListener('click', () => navTo(el.dataset.go)));
+  document.getElementById('more-logout').addEventListener('click', doLogout);
+}
+
 /* =========================================================================
    Panel administratora
    ========================================================================= */
@@ -400,25 +655,39 @@ function renderAdmin() {
             ${!hasSub(u, 'plus') && !hasSub(u, 'pro') ? '<span class="badge active-badge">STANDARD</span>' : ''}
           </div>
           <div class="admin-user-meta">PIN: <b>${esc(u.pin)}</b> • Saldo: <b>${fmt(u.balance)}</b> • Transakcje: ${Object.keys(u.transactions || {}).length}</div>
+          <div class="admin-user-meta">💎 ${num(u.teo)} TEO • 🏦 ${fmt(u.savings)} • 📉 ${fmt(u.debt)}${u.frozen ? ' • ❄️ zamrożona' : ''}</div>
           <div class="admin-user-meta">${esc(u.cardNumber)}</div>
         </div>
       </div>
       <div class="admin-actions">
-        <input type="number" class="adm-amt" placeholder="Kwota" style="max-width:100px" />
+        <input type="number" class="adm-amt" placeholder="Kwota zł" style="max-width:95px" />
         <button class="btn btn-good btn-sm" data-adm="credit">Uznaj</button>
         <button class="btn btn-danger btn-sm" data-adm="debit">Obciąż</button>
       </div>
       <div class="admin-actions">
-        ${subBtn(u, 'plus')}
-        ${subBtn(u, 'pro')}
-        <input type="text" class="adm-pin" placeholder="Nowy PIN" maxlength="4" style="max-width:90px" />
-        <button class="btn btn-ghost btn-sm" data-adm="setpin">Ustaw PIN</button>
+        <input type="number" class="adm-teo" placeholder="TEO 💎" style="max-width:90px" />
+        <button class="btn btn-good btn-sm" data-adm="teo-add">Dodaj TEO</button>
+        <button class="btn btn-danger btn-sm" data-adm="teo-sub">Zabierz TEO</button>
       </div>
       <div class="admin-actions">
-        <input type="text" class="adm-name" placeholder="Zmień imię" style="max-width:130px" />
+        <input type="number" class="adm-debt" placeholder="Dług zł" style="max-width:90px" />
+        <button class="btn btn-danger btn-sm" data-adm="debt-add">Nadaj dług</button>
+        <button class="btn btn-good btn-sm" data-adm="debt-sub">Umorz dług</button>
+      </div>
+      <div class="admin-actions">
+        ${subBtn(u, 'plus')}
+        ${subBtn(u, 'pro')}
+        <button class="btn btn-ghost btn-sm" data-adm="freeze">${u.frozen ? 'Odmroź' : 'Zamroź'} kartę</button>
+      </div>
+      <div class="admin-actions">
+        <input type="text" class="adm-pin" placeholder="Nowy PIN" maxlength="8" style="max-width:90px" />
+        <button class="btn btn-ghost btn-sm" data-adm="setpin">Ustaw PIN</button>
+        <input type="text" class="adm-name" placeholder="Zmień imię" style="max-width:120px" />
         <button class="btn btn-ghost btn-sm" data-adm="rename">Zmień imię</button>
+      </div>
+      <div class="admin-actions">
         <button class="btn btn-ghost btn-sm" data-adm="view">Podgląd</button>
-        <button class="btn btn-danger btn-sm" data-adm="delete">Usuń</button>
+        <button class="btn btn-danger btn-sm" data-adm="delete">Usuń konto</button>
       </div>
     </div>`).join('');
 
@@ -507,6 +776,32 @@ function wireAdmin() {
         await Store.pushTx(u.id, mkTx('out', 'Obciążenie TF CARD (admin)', amt));
         toast(`Obciążono ${u.name} o ${fmt(amt)}`, 'good');
       }
+    } else if (action === 'teo-add' || action === 'teo-sub') {
+      const amt = parseInt(wrap.querySelector('.adm-teo').value, 10);
+      if (!amt || amt <= 0) return toast('Podaj liczbę punktów', 'bad');
+      if (action === 'teo-add') {
+        await Store.updateUser(u.id, { teo: num(u.teo) + amt });
+        await Store.pushTx(u.id, mkTx('teo_in', 'TEOpoints od admina', amt));
+        track('teo_grant', { amount: amt });
+        toast(`Dodano ${amt} 💎 dla ${u.name}`, 'good');
+      } else {
+        await Store.updateUser(u.id, { teo: Math.max(0, num(u.teo) - amt) });
+        await Store.pushTx(u.id, mkTx('teo_out', 'Korekta TEOpoints (admin)', amt));
+        toast(`Zabrano ${amt} 💎 od ${u.name}`, 'good');
+      }
+    } else if (action === 'debt-add' || action === 'debt-sub') {
+      const amt = parseFloat(wrap.querySelector('.adm-debt').value);
+      if (!amt || amt <= 0) return toast('Podaj kwotę', 'bad');
+      if (action === 'debt-add') {
+        await Store.updateUser(u.id, { debt: num(u.debt) + amt });
+        toast(`Nadano dług ${fmt(amt)}: ${u.name}`, 'good');
+      } else {
+        await Store.updateUser(u.id, { debt: Math.max(0, num(u.debt) - amt) });
+        toast(`Umorzono ${fmt(amt)} długu: ${u.name}`, 'good');
+      }
+    } else if (action === 'freeze') {
+      await Store.updateUser(u.id, { frozen: !u.frozen });
+      toast(u.frozen ? `Odmrożono kartę: ${u.name}` : `Zamrożono kartę: ${u.name}`, 'good');
     } else if (action === 'give') {
       const key = btn.dataset.key;
       await Store.updateUser(u.id, { subs: Object.assign({}, u.subs, { [key]: true }) });
