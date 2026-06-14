@@ -68,6 +68,7 @@
     const products = () => Store.meta().vending || [];
 
     let cart = {}; // { productId: qty }
+    let charging = false;
 
     function toast(msg, kind = '') {
       const el = document.getElementById('toast');
@@ -134,13 +135,28 @@
             <button class="btn btn-primary" id="charge" ${cartCount() ? '' : 'disabled'}>Przyjmij płatność</button>
             <button class="btn btn-ghost" id="clear" ${cartCount() ? '' : 'disabled'}>Wyczyść</button>
           </div>
-        </div>`;
-      document.getElementById('vlogout').onclick = () => { localStorage.removeItem(SESSION_KEY); cart = {}; render(); };
+        </div>
+        ${charging ? `
+        <div class="section-title">Płatność — ${fmt(cartTotal())}</div>
+        <div class="card">
+          <button class="btn btn-primary btn-block" id="do-scan">📷 Skanuj kod QR klienta</button>
+          <div class="field mt"><label>…lub PIN / kod klienta</label><input type="text" id="cust-code" placeholder="PIN lub TFPAY:..." /></div>
+          <div class="row-2">
+            <button class="btn btn-good" id="do-pay">Pobierz płatność</button>
+            <button class="btn btn-ghost" id="do-cancel">Anuluj</button>
+          </div>
+        </div>` : ''}`;
+      document.getElementById('vlogout').onclick = () => { localStorage.removeItem(SESSION_KEY); cart = {}; charging = false; render(); };
       c.querySelectorAll('[data-add]').forEach(el => el.onclick = () => { cart[el.dataset.add] = (cart[el.dataset.add] || 0) + 1; render(); });
       c.querySelectorAll('[data-inc]').forEach(el => el.onclick = () => { cart[el.dataset.inc]++; render(); });
       c.querySelectorAll('[data-dec]').forEach(el => el.onclick = () => { cart[el.dataset.dec]--; if (cart[el.dataset.dec] <= 0) delete cart[el.dataset.dec]; render(); });
-      document.getElementById('clear').onclick = () => { cart = {}; render(); };
-      document.getElementById('charge').onclick = charge;
+      document.getElementById('clear').onclick = () => { cart = {}; charging = false; render(); };
+      document.getElementById('charge').onclick = () => { if (cartTotal() > 0) { charging = true; render(); } };
+      if (charging) {
+        document.getElementById('do-scan').onclick = () => startScan(onCustomer);
+        document.getElementById('do-pay').onclick = () => onCustomer(document.getElementById('cust-code').value);
+        document.getElementById('do-cancel').onclick = () => { charging = false; render(); };
+      }
     }
 
     function vlogin() {
@@ -151,22 +167,12 @@
       render();
     }
 
-    function charge() {
-      const total = cartTotal();
-      if (total <= 0) return;
-      // poproś o klienta: skan QR lub PIN
-      const code = prompt(`Do zapłaty: ${fmt(total)}\n\nWpisz PIN klienta lub kod TFPAY:..., albo OK aby zeskanować QR.`);
-      if (code === null) { startScan(onCustomer); return; }
-      const v = code.trim();
-      if (!v) { startScan(onCustomer); return; }
-      onCustomer(v);
-    }
-
     async function onCustomer(raw) {
       const total = cartTotal();
       const s = seller();
       if (!s || total <= 0) return;
       const v = (raw || '').trim();
+      if (!v) return toast('Zeskanuj kod lub wpisz PIN klienta', 'bad');
       let customer = null;
       if (/^TFPAY:/i.test(v)) customer = Store.state().users[v.replace(/^TFPAY:/i, '')];
       else customer = Store.users().find(u => u.pin === v);
@@ -182,7 +188,7 @@
       await Store.pushTx(s.id, { type: 'in', title: `Sprzedaż: ${items}`, amount: total, ts: Date.now() });
       toast(`Przyjęto ${fmt(total)} od ${customer.name} ✓`, 'good');
       celebrate();
-      cart = {}; render();
+      cart = {}; charging = false; render();
     }
 
     /* skaner QR */
