@@ -13,10 +13,15 @@ const PLANS = {
   standard: { id: 'standard', name: 'TF CARD', tier: 'STANDARD', price: 0, color: '',
     features: ['Konto i karta TF CARD', 'Płatności TF PAY', 'Historia transakcji'] },
   plus: { id: 'plus', name: 'TF CARD PLUS', tier: 'PLUS', price: 14.99, color: 'plus',
-    features: ['Wszystko ze STANDARD', 'Wyższe limity przelewów', 'Cashback 2%', 'Bez opłat za przewalutowanie', 'Wsparcie priorytetowe'] },
+    features: ['Zniżka 10% w TFKF Cafe', 'Prezent urodzinowy: 100 💎 + 25 zł', 'Niebieski akcent konta', 'Wsparcie priorytetowe'] },
   pro: { id: 'pro', name: 'TF CARD PRO', tier: 'PRO', price: 39.99, color: 'pro',
-    features: ['Wszystko z PLUS', 'Karta metalowa PRO', 'Cashback 5%', 'Nielimitowane przelewy', 'Ubezpieczenie podróżne', 'Doradca 24/7'] },
+    features: ['Zniżka 25% w TFKF Cafe', 'Prezent urodzinowy: 250 💎 + 100 zł', 'Złoty wygląd konta ✨', 'Doradca 24/7'] },
 };
+
+/* Perki zależne od planu */
+const BDAY = { standard: { teo: 25, cash: 0 }, plus: { teo: 100, cash: 25 }, pro: { teo: 250, cash: 100 } };
+const CAFE_FACTOR = { standard: 1, plus: 0.90, pro: 0.75 }; // zniżka w Cafe
+function cafeFactor(u) { return CAFE_FACTOR[(u.subs && u.subs.pro) ? 'pro' : (u.subs && u.subs.plus) ? 'plus' : 'standard']; }
 
 /* ---------- stan sesji ---------- */
 let session = JSON.parse(localStorage.getItem(SESSION_KEY) || 'null'); // {type:'user',id} | {type:'admin'}
@@ -98,6 +103,22 @@ function subLabel(u) {
   return a.length ? a.join(' + ') : 'STANDARD';
 }
 
+/* Prezent urodzinowy — TEOpoints + kasa, raz w roku, zależnie od planu */
+async function checkBirthday() {
+  const u = currentUser(); if (!u || !u.birthday) return;
+  const now = new Date();
+  const mmdd = String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0');
+  if (u.birthday !== mmdd || u.bdayYear === now.getFullYear()) return;
+  const b = BDAY[tierOf(u)];
+  const patch = { bdayYear: now.getFullYear(), teo: num(u.teo) + b.teo };
+  if (b.cash > 0) patch.balance = num(u.balance) + b.cash;
+  await Store.updateUser(u.id, patch);
+  if (b.teo > 0) await Store.pushTx(u.id, mkTx('teo_in', 'Prezent urodzinowy 🎂', b.teo));
+  if (b.cash > 0) await Store.pushTx(u.id, mkTx('in', 'Prezent urodzinowy 🎂', b.cash));
+  toast('Wszystkiego najlepszego! 🎂🎉', 'good');
+  celebrate();
+}
+
 /* =========================================================================
    Start
    ========================================================================= */
@@ -150,7 +171,7 @@ function showStorageMode() {
 /* Reakcja na każdą zmianę danych (również z innego telefonu / od admina) */
 function onState() {
   if (session && session.type === 'user' && !currentUser()) { doLogout(); return; }
-  if (session && session.type === 'user') { showApp(); routeRender(); }
+  if (session && session.type === 'user') { showApp(); routeRender(); checkBirthday(); }
   else if (session && session.type === 'admin') { showAdmin(); renderAdmin(); }
   else if (!localStorage.getItem(LANDING_KEY)) showLanding();
   else showLock();
@@ -295,6 +316,10 @@ function routeRender() {
 
 function render() {
   const u = currentUser(); if (!u) return;
+  const app = document.getElementById('app-screen');
+  app.classList.remove('tier-pro', 'tier-plus');
+  const t = tierOf(u);
+  if (t === 'pro') app.classList.add('tier-pro'); else if (t === 'plus') app.classList.add('tier-plus');
   const views = {
     home: viewHome, pay: viewPay, subs: viewSubs,
     teo: viewTeo, more: viewMore, savings: viewSavings,
@@ -867,6 +892,11 @@ function renderAdmin() {
         <button class="btn btn-ghost btn-sm" data-adm="rename">Zmień imię</button>
       </div>
       <div class="admin-actions">
+        <span class="muted" style="font-size:12px">🎂 ${u.birthday ? esc(u.birthday) : 'brak'}</span>
+        <input type="date" class="adm-bday" />
+        <button class="btn btn-ghost btn-sm" data-adm="bday">Ustaw urodziny</button>
+      </div>
+      <div class="admin-actions">
         <button class="btn ${u.cafeAccess ? 'btn-good' : 'btn-ghost'} btn-sm" data-adm="cafe">☕ Cafe: ${u.cafeAccess ? 'TAK' : 'NIE'}</button>
         <button class="btn btn-ghost btn-sm" data-adm="view">Podgląd</button>
         <button class="btn btn-danger btn-sm" data-adm="delete">Usuń konto</button>
@@ -905,7 +935,10 @@ function renderAdmin() {
         <div class="field" style="margin:0"><label>Imię</label><input type="text" id="new-name" placeholder="np. Anna" /></div>
         <div class="field" style="margin:0"><label>PIN (4–8 cyfr)</label><input type="text" id="new-pin" inputmode="numeric" maxlength="8" placeholder="np. 4321" /></div>
       </div>
-      <div class="field mt" style="margin-bottom:0"><label>Saldo startowe (zł)</label><input type="number" id="new-balance" min="0" step="0.01" placeholder="0,00" /></div>
+      <div class="row-2 mt">
+        <div class="field" style="margin:0"><label>Saldo startowe (zł)</label><input type="number" id="new-balance" min="0" step="0.01" placeholder="0,00" /></div>
+        <div class="field" style="margin:0"><label>Urodziny</label><input type="date" id="new-bday" /></div>
+      </div>
       <div class="admin-actions" style="margin-top:12px">
         <label style="display:flex;align-items:center;gap:6px;font-size:14px"><input type="checkbox" id="new-plus" /> PLUS</label>
         <label style="display:flex;align-items:center;gap:6px;font-size:14px"><input type="checkbox" id="new-pro" /> PRO</label>
@@ -981,11 +1014,12 @@ function wireAdmin() {
     const balance = parseFloat(document.getElementById('new-balance').value) || 0;
     const plus = document.getElementById('new-plus').checked;
     const pro = document.getElementById('new-pro').checked;
+    const birthday = (document.getElementById('new-bday').value || '').slice(5); // YYYY-MM-DD -> MM-DD
     if (!name) return toast('Podaj imię', 'bad');
     if (!/^\d{4,8}$/.test(pin)) return toast('PIN to 4–8 cyfr', 'bad');
     if (pin === (Store.meta().adminPin)) return toast('Ten PIN jest zajęty (admin)', 'bad');
     if (Store.users().some(u => u.pin === pin)) return toast('Ten PIN jest już zajęty', 'bad');
-    const u = Store.newUser({ name, pin, balance, plus, pro });
+    const u = Store.newUser({ name, pin, balance, plus, pro, birthday });
     await Store.setUser(u.id, u);
     track('account_create', { plus, pro });
     toast(`Utworzono konto: ${name}`, 'good'); renderAdmin();
@@ -1055,6 +1089,11 @@ function wireAdmin() {
     } else if (action === 'cafe') {
       await Store.updateUser(u.id, { cafeAccess: !u.cafeAccess });
       toast(u.cafeAccess ? `Zabrano dostęp Cafe: ${u.name}` : `Nadano dostęp Cafe: ${u.name}`, 'good');
+    } else if (action === 'bday') {
+      const d = (wrap.querySelector('.adm-bday').value || '').slice(5);
+      if (!d) return toast('Wybierz datę', 'bad');
+      await Store.updateUser(u.id, { birthday: d, bdayYear: 0 });
+      toast(`Ustawiono urodziny: ${u.name} (${d})`, 'good');
     } else if (action === 'give') {
       const key = btn.dataset.key;
       await Store.updateUser(u.id, { subs: Object.assign({}, u.subs, { [key]: true }) });

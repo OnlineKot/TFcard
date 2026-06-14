@@ -166,8 +166,8 @@
     async function onCustomer(raw) {
       const p = pending; const s = seller();
       if (!p || !s) return;
-      const cost = num(p.cost);
-      if (cost === 0) {
+      const base = num(p.cost);
+      if (base === 0) {
         await Store.pushTx(s.id, { type: 'teo_in', title: `Cafe gratis: ${p.name}`, amount: 0, ts: Date.now() });
         toast(`Wydano gratis: ${p.name} ☕`, 'good'); celebrate(); pending = null; return;
       }
@@ -179,13 +179,17 @@
       else if (v) customer = Store.users().find(u => u.pin === v);
       if (!customer) return toast('Nie znaleziono klienta', 'bad');
       if (customer.id === s.id) return toast('To Twoje konto', 'bad');
+      // zniżka zależna od planu klienta (PLUS 10%, PRO 25%)
+      const factor = (customer.subs && customer.subs.pro) ? 0.75 : (customer.subs && customer.subs.plus) ? 0.90 : 1;
+      const cost = Math.max(0, Math.round(base * factor));
+      const disc = cost < base ? ` (zniżka -${base - cost} 💎)` : '';
       if (num(customer.teo) < cost) return toast('Klient ma za mało TEOpoints', 'bad');
       await Store.updateUser(customer.id, { teo: num(customer.teo) - cost });
-      await Store.pushTx(customer.id, { type: 'teo_out', title: `TFKF Cafe: ${p.name}`, amount: cost, ts: Date.now() });
+      await Store.pushTx(customer.id, { type: 'teo_out', title: `TFKF Cafe: ${p.name}${disc}`, amount: cost, ts: Date.now() });
       await Store.updateUser(s.id, { teo: num(s.teo) + cost });
       await Store.pushTx(s.id, { type: 'teo_in', title: `Cafe sprzedaż: ${p.name}`, amount: cost, ts: Date.now() });
       if (usedCode) await Store.consumeCode(usedCode);
-      toast(`Sprzedano: ${p.name} za ${cost} 💎`, 'good'); celebrate(); pending = null;
+      toast(`Sprzedano: ${p.name} za ${cost} 💎${disc}`, 'good'); celebrate(); pending = null;
     }
 
     /* skaner QR */

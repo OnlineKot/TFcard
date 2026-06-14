@@ -110,6 +110,11 @@ body {
 .balance-block { text-align: center; margin: 6px 0 26px; }
 .balance-label { color: var(--muted); font-size: 14px; }
 .balance-amount { font-size: 44px; font-weight: 800; letter-spacing: -1px; margin-top: 4px; }
+/* Wygląd zależny od planu */
+.tier-plus .balance-amount { background: linear-gradient(90deg, #6e8bff, #38d6e0); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.tier-pro .balance-amount { background: linear-gradient(90deg, #f4c45a, #ffe6a0, #d4a017); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.tier-pro .avatar { background: linear-gradient(135deg, #f4c45a, #d4a017); color: #1a1300; }
+.tier-pro .balance-label::after { content: ' ✨'; }
 
 /* ---------- Okrągłe akcje (Revolut) ---------- */
 .actions-row { display: flex; justify-content: center; gap: 26px; margin: 6px 0 8px; }
