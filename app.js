@@ -203,7 +203,7 @@ function showApp() {
 }
 
 /* Podświetlenie w dolnej nawigacji dla widoków podrzędnych (np. „Więcej") */
-const NAV_FOR = { home: 'home', pay: 'pay', qr: 'pay', teo: 'teo', cards: 'cards', more: 'more', subs: 'more', savings: 'more', profile: 'more', stats: 'more', debt: 'more' };
+const NAV_FOR = { home: 'home', pay: 'pay', qr: 'pay', teo: 'teo', more: 'more', subs: 'more', savings: 'more', profile: 'more', stats: 'more', debt: 'more' };
 
 function navTo(view) {
   activeView = view;
@@ -229,7 +229,7 @@ function routeRender() {
 function render() {
   const u = currentUser(); if (!u) return;
   const views = {
-    home: viewHome, pay: viewPay, cards: viewCards, subs: viewSubs,
+    home: viewHome, pay: viewPay, subs: viewSubs,
     teo: viewTeo, more: viewMore, savings: viewSavings,
     profile: viewProfile, stats: viewStats, debt: viewDebt, qr: viewQr,
   };
@@ -242,7 +242,7 @@ function render() {
     return;
   }
   const wires = {
-    home: wireHome, pay: wirePay, cards: wireCards, subs: wireSubs,
+    home: wireHome, pay: wirePay, subs: wireSubs,
     teo: wireTeo, more: wireMore, savings: wireSavings,
     profile: wireProfile, debt: wireDebt, qr: wireQr,
   };
@@ -251,26 +251,6 @@ function render() {
 }
 
 /* ---------- Pulpit ---------- */
-function bankCardHTML(u) {
-  const tier = tierOf(u);
-  const color = tier === 'pro' ? 'pro' : tier === 'plus' ? 'plus' : '';
-  return `
-    <div class="bankcard ${color}">
-      <div class="bankcard-top">
-        <div class="bankcard-tier">TF CARD ${subLabel(u)}</div>
-        <div class="bankcard-chip"></div>
-      </div>
-      <div>
-        <div class="bankcard-balance-label">Saldo</div>
-        <div class="bankcard-balance">${fmt(u.balance)}</div>
-      </div>
-      <div>
-        <div class="bankcard-number">${esc(u.cardNumber)}</div>
-        <div class="bankcard-bottom"><span>${esc(u.name.toUpperCase())}</span><span>TF&nbsp;PAY</span></div>
-      </div>
-    </div>`;
-}
-
 function viewHome(u) {
   const txs = txArr(u).slice(0, 6);
   return `
@@ -284,7 +264,7 @@ function viewHome(u) {
     <div class="balance-block">
       <div class="balance-label">Cześć, ${esc(u.name.split(' ')[0])} 👋 • ${new Date().toLocaleDateString('pl-PL', { weekday: 'long', day: 'numeric', month: 'long' })}</div>
       <div class="balance-amount">${fmt(u.balance)}</div>
-      ${(u.frozen) ? '<div class="badge gold" style="margin-top:6px;display:inline-block">❄️ Karta zamrożona</div>' : ''}
+      ${(u.frozen) ? '<div class="badge gold" style="margin-top:6px;display:inline-block">❄️ Płatności zablokowane</div>' : ''}
     </div>
     <div class="actions-row">
       <div class="action" data-go="pay"><div class="circle">💸</div><span>Wyślij</span></div>
@@ -292,7 +272,6 @@ function viewHome(u) {
       <div class="action" data-go="teo"><div class="circle">💎</div><span>TEOpoints</span></div>
       <div class="action" data-go="more"><div class="circle">⋯</div><span>Więcej</span></div>
     </div>
-    ${bankCardHTML(u)}
     <div class="mini-row">
       <div class="mini" data-go="teo"><span>💎 TEOpoints</span><b>${num(u.teo)}</b></div>
       <div class="mini" data-go="savings"><span>🏦 Skarbonka</span><b>${fmt(u.savings)}</b></div>
@@ -334,7 +313,7 @@ function viewPay(u) {
   return `
     <div class="greeting">TF PAY ⚡</div>
     <div class="greeting-sub">Saldo: <b>${fmt(u.balance)}</b></div>
-    ${frozen ? '<div class="card" style="border-color:var(--gold);margin-bottom:14px">❄️ Karta jest zamrożona — przelewy zablokowane. Odmroź ją w zakładce Karty.</div>' : ''}
+    ${frozen ? '<div class="card" style="border-color:var(--gold);margin-bottom:14px">❄️ Płatności zablokowane. Odblokuj w Profilu (Więcej → Profil).</div>' : ''}
     <div class="section-title">Przelew do innego konta TF CARD</div>
     <div class="card">
       <div class="field"><label>Odbiorca</label><select id="pay-to" ${others.length && !frozen ? '' : 'disabled'}>${opts}</select></div>
@@ -350,7 +329,7 @@ function viewPay(u) {
 function wirePay(u) {
   document.querySelectorAll('[data-go]').forEach(el => el.addEventListener('click', () => navTo(el.dataset.go)));
   document.getElementById('pay-send').addEventListener('click', async () => {
-    if (u.frozen) return toast('Karta zamrożona', 'bad');
+    if (u.frozen) return toast('Płatności zablokowane', 'bad');
     const toId = document.getElementById('pay-to').value;
     const amount = parseFloat(document.getElementById('pay-amount').value);
     const title = document.getElementById('pay-title').value.trim() || 'Przelew TF PAY';
@@ -401,7 +380,7 @@ function viewQr(u) {
     </div>
     <div class="section-title">Zapłać kodem</div>
     <div class="card">
-      ${frozen ? '<p class="muted" style="margin-bottom:10px">❄️ Karta zamrożona — płatności zablokowane.</p>' : ''}
+      ${frozen ? '<p class="muted" style="margin-bottom:10px">❄️ Płatności zablokowane (odblokuj w Profilu).</p>' : ''}
       <div class="field"><label>Kod odbiorcy (TFPAY:...)</label><input type="text" id="qr-code" placeholder="TFPAY:u-xxxxxxxx" ${frozen ? 'disabled' : ''} /></div>
       <div class="field"><label>Kwota (PLN)</label><input type="number" id="qr-amount" min="0.01" step="0.01" placeholder="0,00" ${frozen ? 'disabled' : ''} /></div>
       <button class="btn btn-primary btn-block" id="qr-pay" ${frozen ? 'disabled' : ''}>Zapłać</button>
@@ -411,7 +390,7 @@ function viewQr(u) {
 function wireQr(u) {
   renderQR('qr-box', payCode(u));
   document.getElementById('qr-pay').addEventListener('click', async () => {
-    if (u.frozen) return toast('Karta zamrożona', 'bad');
+    if (u.frozen) return toast('Płatności zablokowane', 'bad');
     const raw = document.getElementById('qr-code').value.trim();
     const amount = parseFloat(document.getElementById('qr-amount').value);
     const toId = raw.replace(/^TFPAY:/i, '');
@@ -429,38 +408,6 @@ function wireQr(u) {
     track('qr_payment', { amount });
     toast(`Zapłacono ${fmt(amount)} dla ${recipient.name}`, 'good');
     navTo('pay');
-  });
-}
-
-/* ---------- Karty ---------- */
-function viewCards(u) {
-  return `
-    <div class="greeting">Twoje karty 💳</div>
-    <div class="greeting-sub">Subskrypcje: ${esc(subLabel(u))}</div>
-    ${bankCardHTML(u)}
-    <div class="section-title">Szczegóły</div>
-    <div class="card">
-      <div class="tx"><div class="tx-main"><div class="tx-title">Numer karty</div></div><div>${esc(u.cardNumber)}</div></div>
-      <div class="tx"><div class="tx-main"><div class="tx-title">Posiadacz</div></div><div>${esc(u.name)}</div></div>
-      <div class="tx"><div class="tx-main"><div class="tx-title">Ważna do</div></div><div>12/29</div></div>
-      <div class="tx"><div class="tx-main"><div class="tx-title">CVV</div></div><div>•••</div></div>
-      <div class="tx"><div class="tx-main"><div class="tx-title">Subskrypcje</div></div><div>${esc(subLabel(u))}</div></div>
-      <div class="tx"><div class="tx-main"><div class="tx-title">Status</div></div><div>${u.frozen ? '❄️ Zamrożona' : '✅ Aktywna'}</div></div>
-    </div>
-    <div class="row-2 mt">
-      <button class="btn ${u.frozen ? 'btn-good' : 'btn-ghost'}" id="card-freeze">${u.frozen ? 'Odmroź kartę' : '❄️ Zamroź kartę'}</button>
-      <button class="btn btn-ghost" id="card-regen">Nowy numer</button>
-    </div>`;
-}
-
-function wireCards(u) {
-  document.getElementById('card-regen').addEventListener('click', async () => {
-    await Store.updateUser(u.id, { cardNumber: Store.newCard() });
-    toast('Wygenerowano nowy numer karty', 'good'); render();
-  });
-  document.getElementById('card-freeze').addEventListener('click', async () => {
-    await Store.updateUser(u.id, { frozen: !u.frozen });
-    toast(u.frozen ? 'Karta odmrożona' : 'Karta zamrożona ❄️', 'good'); render();
   });
 }
 
@@ -616,18 +563,23 @@ function viewProfile(u) {
     <div class="greeting-sub">${esc(u.name)}</div>
     <div class="card">
       <div class="tx"><div class="tx-main"><div class="tx-title">Imię</div></div><div>${esc(u.name)}</div></div>
-      <div class="tx"><div class="tx-main"><div class="tx-title">Karta</div></div><div>${esc(u.cardNumber)}</div></div>
       <div class="tx"><div class="tx-main"><div class="tx-title">Subskrypcje</div></div><div>${esc(subLabel(u))}</div></div>
+      <div class="tx"><div class="tx-main"><div class="tx-title">Płatności</div></div><div>${u.frozen ? '❄️ Zablokowane' : '✅ Aktywne'}</div></div>
       <div class="tx"><div class="tx-main"><div class="tx-title">Klient od</div></div><div>${new Date(u.createdAt).toLocaleDateString('pl-PL')}</div></div>
     </div>
-    <div class="section-title">Zmień swój PIN</div>
+    <div class="section-title">Bezpieczeństwo</div>
     <div class="card">
-      <div class="field"><label>Nowy PIN (4–8 cyfr)</label><input type="text" id="prof-pin" inputmode="numeric" maxlength="8" placeholder="••••" /></div>
+      <button class="btn ${u.frozen ? 'btn-good' : 'btn-ghost'} btn-block" id="prof-freeze">${u.frozen ? 'Odblokuj płatności' : '❄️ Zablokuj płatności'}</button>
+      <div class="field mt"><label>Nowy PIN (4–8 cyfr)</label><input type="text" id="prof-pin" inputmode="numeric" maxlength="8" placeholder="••••" /></div>
       <button class="btn btn-primary btn-block" id="prof-save">Zapisz PIN</button>
     </div>
     <button class="btn btn-danger btn-block mt" id="prof-logout">Wyloguj</button>`;
 }
 function wireProfile(u) {
+  document.getElementById('prof-freeze').addEventListener('click', async () => {
+    await Store.updateUser(u.id, { frozen: !u.frozen });
+    toast(u.frozen ? 'Płatności odblokowane' : 'Płatności zablokowane ❄️', 'good'); render();
+  });
   document.getElementById('prof-save').addEventListener('click', async () => {
     const pin = document.getElementById('prof-pin').value.trim();
     if (!/^\d{4,8}$/.test(pin)) return toast('PIN to 4–8 cyfr', 'bad');
@@ -682,8 +634,7 @@ function viewMore(u) {
       ${item('teo', '💎', 'TEOpoints', `${num(u.teo)} punktów`)}
       ${item('debt', '📉', 'Dług', num(u.debt) > 0 ? fmt(u.debt) + ' do spłaty' : 'brak')}
       ${item('stats', '📊', 'Statystyki', 'podsumowanie konta')}
-      ${item('cards', '💳', 'Karty', u.frozen ? 'zamrożona' : 'aktywna')}
-      ${item('profile', '👤', 'Profil', 'dane i PIN')}
+      ${item('profile', '👤', 'Profil', u.frozen ? 'płatności zablokowane' : 'dane, PIN, blokada')}
     </div>
     <button class="btn btn-danger btn-block mt" id="more-logout">Wyloguj</button>`;
 }
@@ -721,8 +672,7 @@ function renderAdmin() {
             ${!hasSub(u, 'plus') && !hasSub(u, 'pro') ? '<span class="badge active-badge">STANDARD</span>' : ''}
           </div>
           <div class="admin-user-meta">PIN: <b>${esc(u.pin)}</b> • Saldo: <b>${fmt(u.balance)}</b> • Transakcje: ${Object.keys(u.transactions || {}).length}</div>
-          <div class="admin-user-meta">💎 ${num(u.teo)} TEOpoints • 🏦 ${fmt(u.savings)} • 📉 ${fmt(u.debt)}${u.frozen ? ' • ❄️ zamrożona' : ''}</div>
-          <div class="admin-user-meta">${esc(u.cardNumber)}</div>
+          <div class="admin-user-meta">💎 ${num(u.teo)} TEOpoints • 🏦 ${fmt(u.savings)} • 📉 ${fmt(u.debt)}${u.frozen ? ' • ❄️ płatności zablokowane' : ''}</div>
         </div>
       </div>
       <div class="admin-actions">
@@ -747,7 +697,7 @@ function renderAdmin() {
       <div class="admin-actions">
         ${subBtn(u, 'plus')}
         ${subBtn(u, 'pro')}
-        <button class="btn btn-ghost btn-sm" data-adm="freeze">${u.frozen ? 'Odmroź' : 'Zamroź'} kartę</button>
+        <button class="btn btn-ghost btn-sm" data-adm="freeze">${u.frozen ? 'Odblokuj' : 'Zablokuj'} płatności</button>
       </div>
       <div class="admin-actions">
         <input type="text" class="adm-pin" placeholder="Nowy PIN" maxlength="8" style="max-width:90px" />
@@ -901,7 +851,7 @@ function wireAdmin() {
       }
     } else if (action === 'freeze') {
       await Store.updateUser(u.id, { frozen: !u.frozen });
-      toast(u.frozen ? `Odmrożono kartę: ${u.name}` : `Zamrożono kartę: ${u.name}`, 'good');
+      toast(u.frozen ? `Odblokowano płatności: ${u.name}` : `Zablokowano płatności: ${u.name}`, 'good');
     } else if (action === 'give') {
       const key = btn.dataset.key;
       await Store.updateUser(u.id, { subs: Object.assign({}, u.subs, { [key]: true }) });

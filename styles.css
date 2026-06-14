@@ -1,18 +1,18 @@
 :root {
-  --bg: #0b0f1a;
-  --bg-2: #11172a;
-  --card: #161d33;
-  --card-2: #1c2541;
-  --line: #243049;
-  --txt: #eaf0ff;
-  --muted: #8d9bbd;
-  --accent: #5b8cff;
-  --accent-2: #7c5cff;
-  --good: #2dd4a7;
+  --bg: #000000;
+  --bg-2: #0a0a0d;
+  --card: #0f0f12;
+  --card-2: #17171c;
+  --line: #232329;
+  --txt: #f5f6fa;
+  --muted: #8a8d98;
+  --accent: #6e8bff;
+  --accent-2: #a06bff;
+  --good: #2ee6a6;
   --bad: #ff5d7a;
   --gold: #f4c45a;
-  --radius: 20px;
-  --shadow: 0 16px 50px rgba(0, 0, 0, .5);
+  --radius: 22px;
+  --shadow: 0 18px 60px rgba(0, 0, 0, .7);
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
@@ -20,11 +20,16 @@
 html, body { height: 100%; }
 body {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  background: radial-gradient(1200px 700px at 50% -15%, #1a2347 0%, transparent 60%), var(--bg);
+  background:
+    radial-gradient(900px 520px at 50% -12%, rgba(160, 107, 255, .14), transparent 60%),
+    radial-gradient(760px 520px at 100% 2%, rgba(110, 139, 255, .08), transparent 55%),
+    var(--bg);
+  background-attachment: fixed;
   color: var(--txt);
   min-height: 100vh;
   -webkit-font-smoothing: antialiased;
   padding-top: env(safe-area-inset-top);
+  letter-spacing: .1px;
 }
 
 .hidden { display: none !important; }
@@ -112,10 +117,11 @@ body {
 .action span:last-child { font-size: 12px; color: var(--muted); }
 
 /* ---------- Karta bankowa ---------- */
-.bankcard { position: relative; border-radius: 22px; padding: 22px; color: #fff; overflow: hidden; min-height: 200px; display: flex; flex-direction: column; justify-content: space-between; background: linear-gradient(135deg, #2a3766, #4b2f8c); box-shadow: var(--shadow); }
-.bankcard.plus { background: linear-gradient(135deg, #143b4d, #137a6b); }
-.bankcard.pro { background: linear-gradient(135deg, #2a2118, #6e5212); }
-.bankcard::after { content: ""; position: absolute; right: -70px; top: -70px; width: 220px; height: 220px; border-radius: 50%; background: rgba(255,255,255,.08); }
+.bankcard { position: relative; border-radius: 24px; padding: 22px; color: #fff; overflow: hidden; min-height: 200px; display: flex; flex-direction: column; justify-content: space-between; background: linear-gradient(150deg, #15151b 0%, #1d1730 55%, #241a3a 100%); border: 1px solid #2c2c36; box-shadow: var(--shadow); }
+.bankcard.plus { background: linear-gradient(150deg, #0e1a1e 0%, #0f2b2a 100%); border-color: #1c3a38; }
+.bankcard.pro { background: linear-gradient(150deg, #1a1710 0%, #2a2113 100%); border-color: #3a2f17; }
+.bankcard::before { content: ""; position: absolute; inset: 0; background: linear-gradient(120deg, rgba(255,255,255,.06), transparent 40%); pointer-events: none; }
+.bankcard::after { content: ""; position: absolute; right: -70px; top: -70px; width: 220px; height: 220px; border-radius: 50%; background: radial-gradient(circle, rgba(160,107,255,.18), transparent 70%); }
 .bankcard-top { display: flex; justify-content: space-between; align-items: flex-start; }
 .bankcard-tier { font-size: 12px; letter-spacing: 2px; opacity: .9; font-weight: 700; }
 .bankcard-chip { width: 44px; height: 33px; border-radius: 7px; background: linear-gradient(135deg, #f4d35e, #d4a017); }
@@ -198,7 +204,7 @@ body {
 .admin-actions input, .admin-actions select { background: var(--bg-2); border: 1px solid var(--line); border-radius: 10px; padding: 9px; color: var(--txt); font-size: 13px; }
 
 /* ---------- Bottom nav ---------- */
-.bottom-nav { position: fixed; bottom: 0; left: 0; right: 0; z-index: 30; display: flex; justify-content: space-around; background: rgba(17,23,42,.92); backdrop-filter: blur(14px); border-top: 1px solid var(--line); padding: 9px 4px calc(9px + env(safe-area-inset-bottom)); }
+.bottom-nav { position: fixed; bottom: 0; left: 0; right: 0; z-index: 30; display: flex; justify-content: space-around; background: rgba(10,10,13,.82); backdrop-filter: blur(20px) saturate(140%); -webkit-backdrop-filter: blur(20px) saturate(140%); border-top: 1px solid var(--line); padding: 9px 4px calc(9px + env(safe-area-inset-bottom)); }
 .nav-item { background: none; border: none; color: var(--muted); display: flex; flex-direction: column; align-items: center; gap: 3px; font-size: 10px; cursor: pointer; padding: 6px 12px; border-radius: 12px; }
 .nav-item.active { color: var(--accent); }
 .nav-ico { font-size: 20px; }
@@ -247,15 +253,6 @@ body {
 /* Bardzo szeroki ekran */
 @media (min-width: 1300px) {
   .view-container { max-width: 1040px; }
-}
-
-/* Efekty wskaźnika (mysz) — nie dotykają telefonów */
-@media (hover: hover) {
-  .mini:hover, .more-item:hover, .tile:hover, .plan:hover { border-color: var(--accent); }
-  .action:hover .circle { background: var(--line); }
-  .nav-item:hover { color: var(--txt); }
-  .btn:hover { filter: brightness(1.07); }
-  .tx:hover { background: rgba(255, 255, 255, .02); }
 }
 
 /* Bezpieczne łamanie długich elementów na wąskich telefonach */
