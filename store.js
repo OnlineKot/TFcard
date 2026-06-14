@@ -116,6 +116,22 @@ const Store = {
 
   newUser(opts) { return blankUser(opts.name, opts.pin, opts); },
   newCard: genCard,
+
+  /* Jednorazowe 6-cyfrowe kody płatności (mapowane na konto w meta.codes) */
+  async genCode(uid) {
+    const codes = Object.assign({}, this.meta().codes || {});
+    for (const k in codes) { if (codes[k].uid === uid) delete codes[k]; } // jeden aktywny kod na konto
+    let code;
+    do { code = String(Math.floor(100000 + Math.random() * 900000)); } while (codes[code]);
+    codes[code] = { uid, ts: Date.now() };
+    await this.setMeta({ codes });
+    return code;
+  },
+  resolveCode(code) { const c = (this.meta().codes || {})[code]; return c ? c.uid : null; },
+  async consumeCode(code) {
+    const codes = Object.assign({}, this.meta().codes || {});
+    if (codes[code]) { delete codes[code]; await this.setMeta({ codes }); }
+  },
 };
 
 window.Store = Store;

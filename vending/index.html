@@ -173,8 +173,10 @@
       if (!s || total <= 0) return;
       const v = (raw || '').trim();
       if (!v) return toast('Zeskanuj kod lub wpisz PIN klienta', 'bad');
-      let customer = null;
-      if (/^TFPAY:/i.test(v)) customer = Store.state().users[v.replace(/^TFPAY:/i, '')];
+      let customer = null, usedCode = null;
+      const digits = v.replace(/\D/g, '');
+      const codeUid = digits.length === 6 ? Store.resolveCode(digits) : null;
+      if (codeUid) { usedCode = digits; customer = Store.state().users[codeUid]; }
       else customer = Store.users().find(u => u.pin === v);
       if (!customer) return toast('Nie znaleziono klienta', 'bad');
       if (customer.id === s.id) return toast('To Twoje konto', 'bad');
@@ -186,6 +188,7 @@
       await Store.pushTx(customer.id, { type: 'out', title: `Zakup u ${s.name}: ${items}`, amount: total, ts: Date.now() });
       await Store.updateUser(s.id, { balance: num(s.balance) + total });
       await Store.pushTx(s.id, { type: 'in', title: `Sprzedaż: ${items}`, amount: total, ts: Date.now() });
+      if (usedCode) await Store.consumeCode(usedCode);
       toast(`Przyjęto ${fmt(total)} od ${customer.name} ✓`, 'good');
       celebrate();
       cart = {}; charging = false; render();

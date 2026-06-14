@@ -23,6 +23,7 @@ let session = JSON.parse(localStorage.getItem(SESSION_KEY) || 'null'); // {type:
 let activeView = 'home';
 let pinMode = 'user';   // 'user' | 'admin'
 let pinBuf = '';
+let myCode = '';        // jednorazowy kod płatności do otrzymania
 
 /* ---------- pomocnicze ---------- */
 const fmt = (n) => new Intl.NumberFormat('pl-PL', { style: 'currency', currency: 'PLN' }).format(Number(n) || 0);
@@ -412,8 +413,7 @@ function wirePay(u) {
   });
 }
 
-/* ---------- Płatności kodem QR ---------- */
-function payCode(u) { return 'TFPAY:' + u.id; }
+/* ---------- Płatności kodem QR (jednorazowy 6-cyfrowy) ---------- */
 
 function renderQR(elId, text) {
   const el = document.getElementById(elId); if (!el) return;
@@ -469,17 +469,19 @@ function viewQr(u) {
   const frozen = !!u.frozen;
   return `
     <div class="greeting">Płatność QR 📷</div>
-    <div class="greeting-sub">Pokaż kod, by otrzymać przelew</div>
-    <div class="section-title">Mój kod do płatności</div>
+    <div class="greeting-sub">Jednorazowy kod 6-cyfrowy</div>
+    <div class="section-title">Mój kod do otrzymania wpłaty</div>
     <div class="card">
-      <div class="qr-box" id="qr-box"></div>
-      <div class="qr-code-text">${esc(payCode(u))}</div>
-      <p class="center muted" style="font-size:12px;margin-top:8px">Inny użytkownik TF CARD skanuje/wpisuje ten kod, aby Ci zapłacić.</p>
+      ${myCode ? `<div class="qr-box" id="qr-box"></div>
+        <div class="qr-code-text">${esc(myCode)}</div>
+        <p class="center muted" style="font-size:12px;margin-top:8px">Jednorazowy — znika po opłaceniu. Pokaż go płacącemu.</p>`
+        : '<p class="center muted" style="padding:10px">Wygeneruj jednorazowy kod do otrzymania przelewu.</p>'}
+      <button class="btn btn-ghost btn-block mt" id="gen-code">${myCode ? 'Nowy kod' : 'Generuj kod'}</button>
     </div>
     <div class="section-title">Zapłać kodem</div>
     <div class="card">
       ${frozen ? '<p class="muted" style="margin-bottom:10px">❄️ Płatności zablokowane (odblokuj w Profilu).</p>' : ''}
-      <div class="field"><label>Kod odbiorcy (TFPAY:...)</label><input type="text" id="qr-code" placeholder="TFPAY:u-xxxxxxxx" ${frozen ? 'disabled' : ''} /></div>
+      <div class="field"><label>Kod odbiorcy (6 cyfr)</label><input type="text" id="qr-code" inputmode="numeric" maxlength="6" placeholder="np. 123456" ${frozen ? 'disabled' : ''} /></div>
       <button class="btn btn-ghost btn-block" id="qr-scan" ${frozen ? 'disabled' : ''}>📷 Skanuj kod QR</button>
       <div class="field mt"><label>Kwota (PLN)</label><input type="number" id="qr-amount" min="0.01" step="0.01" placeholder="0,00" ${frozen ? 'disabled' : ''} /></div>
       <button class="btn btn-primary btn-block" id="qr-pay" ${frozen ? 'disabled' : ''}>Zapłać</button>
@@ -487,23 +489,29 @@ function viewQr(u) {
 }
 
 function wireQr(u) {
-  renderQR('qr-box', payCode(u));
+  if (myCode) renderQR('qr-box', myCode);
+  document.getElementById('gen-code').addEventListener('click', async () => {
+    myCode = await Store.genCode(u.id);
+    toast('Wygenerowano jednorazowy kod', 'good');
+    render();
+  });
   document.getElementById('qr-scan').addEventListener('click', () => {
     if (u.frozen) return toast('Płatności zablokowane', 'bad');
     startScan((text) => {
-      const code = (text || '').trim();
-      if (!/^TFPAY:/i.test(code)) { toast('To nie jest kod TF PAY', 'bad'); return; }
+      const code = (text || '').replace(/\D/g, '').slice(0, 6);
+      if (code.length !== 6) { toast('To nie jest 6-cyfrowy kod', 'bad'); return; }
       document.getElementById('qr-code').value = code;
       toast('Zeskanowano kod ✓', 'good');
     });
   });
   document.getElementById('qr-pay').addEventListener('click', async () => {
     if (u.frozen) return toast('Płatności zablokowane', 'bad');
-    const raw = document.getElementById('qr-code').value.trim();
+    const code = document.getElementById('qr-code').value.replace(/\D/g, '');
     const amount = parseFloat(document.getElementById('qr-amount').value);
-    const toId = raw.replace(/^TFPAY:/i, '');
-    if (!toId) return toast('Wpisz kod odbiorcy', 'bad');
+    if (code.length !== 6) return toast('Podaj 6-cyfrowy kod', 'bad');
     if (!amount || amount <= 0) return toast('Podaj poprawną kwotę', 'bad');
+    const toId = Store.resolveCode(code);
+    if (!toId) return toast('Kod nieprawidłowy lub już użyty', 'bad');
     if (toId === u.id) return toast('To Twój własny kod', 'bad');
     const recipient = Store.state().users[toId];
     if (!recipient) return toast('Nie znaleziono odbiorcy', 'bad');
@@ -513,6 +521,7 @@ function wireQr(u) {
     await Store.pushTx(u.id, mkTx('out', `Płatność QR do ${recipient.name}`, amount));
     await Store.updateUser(recipient.id, { balance: num(recipient.balance) + amount });
     await Store.pushTx(recipient.id, mkTx('in', `Płatność QR od ${u.name}`, amount));
+    await Store.consumeCode(code); // jednorazowy
     track('qr_payment', { amount });
     toast(`Zapłacono ${fmt(amount)} dla ${recipient.name}`, 'good');
     celebrate();

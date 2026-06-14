@@ -158,7 +158,7 @@
       if (!p) return;
       pending = p;
       if (num(p.cost) === 0) { onCustomer(''); return; } // gratis — wciąż identyfikujemy klienta? nie, wydajemy od razu
-      const code = prompt(`${p.name} — ${num(p.cost)} 💎\n\nWpisz PIN klienta lub kod TFPAY:..., albo OK aby zeskanować QR.`);
+      const code = prompt(`${p.name} — ${num(p.cost)} 💎\n\nWpisz 6-cyfrowy kod lub PIN klienta, albo OK aby zeskanować QR.`);
       if (code === null) { startScan(onCustomer); return; }
       onCustomer(code.trim());
     }
@@ -172,8 +172,10 @@
         toast(`Wydano gratis: ${p.name} ☕`, 'good'); celebrate(); pending = null; return;
       }
       const v = (raw || '').trim();
-      let customer = null;
-      if (/^TFPAY:/i.test(v)) customer = Store.state().users[v.replace(/^TFPAY:/i, '')];
+      let customer = null, usedCode = null;
+      const digits = v.replace(/\D/g, '');
+      const codeUid = digits.length === 6 ? Store.resolveCode(digits) : null;
+      if (codeUid) { usedCode = digits; customer = Store.state().users[codeUid]; }
       else if (v) customer = Store.users().find(u => u.pin === v);
       if (!customer) return toast('Nie znaleziono klienta', 'bad');
       if (customer.id === s.id) return toast('To Twoje konto', 'bad');
@@ -182,6 +184,7 @@
       await Store.pushTx(customer.id, { type: 'teo_out', title: `TFKF Cafe: ${p.name}`, amount: cost, ts: Date.now() });
       await Store.updateUser(s.id, { teo: num(s.teo) + cost });
       await Store.pushTx(s.id, { type: 'teo_in', title: `Cafe sprzedaż: ${p.name}`, amount: cost, ts: Date.now() });
+      if (usedCode) await Store.consumeCode(usedCode);
       toast(`Sprzedano: ${p.name} za ${cost} 💎`, 'good'); celebrate(); pending = null;
     }
 
