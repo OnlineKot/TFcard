@@ -75,11 +75,26 @@ async function init() {
   registerSW();
   setupKeypad();
   setupNav();
+  setupLanding();
   await Store.init();
   initAnalytics();
   Store.subscribe(onState);
   showStorageMode();
   track('app_open', { backend: Store.backend });
+}
+
+const LANDING_KEY = 'tfcard_seen_landing';
+function setupLanding() {
+  document.getElementById('landing-start').addEventListener('click', () => {
+    localStorage.setItem(LANDING_KEY, '1');
+    showLock();
+  });
+}
+function showLanding() {
+  document.getElementById('landing-screen').classList.remove('hidden');
+  document.getElementById('lock-screen').classList.add('hidden');
+  document.getElementById('app-screen').classList.add('hidden');
+  document.getElementById('admin-screen').classList.add('hidden');
 }
 
 function showStorageMode() {
@@ -94,6 +109,7 @@ function onState() {
   if (session && session.type === 'user' && !currentUser()) { doLogout(); return; }
   if (session && session.type === 'user') { showApp(); routeRender(); }
   else if (session && session.type === 'admin') { showAdmin(); renderAdmin(); }
+  else if (!localStorage.getItem(LANDING_KEY)) showLanding();
   else showLock();
 }
 
@@ -101,6 +117,7 @@ function onState() {
    Ekran blokady / PIN
    ========================================================================= */
 function showLock() {
+  document.getElementById('landing-screen').classList.add('hidden');
   document.getElementById('lock-screen').classList.remove('hidden');
   document.getElementById('app-screen').classList.add('hidden');
   document.getElementById('admin-screen').classList.add('hidden');
@@ -179,13 +196,14 @@ function doLogout() {
    Powłoka aplikacji użytkownika
    ========================================================================= */
 function showApp() {
+  document.getElementById('landing-screen').classList.add('hidden');
   document.getElementById('lock-screen').classList.add('hidden');
   document.getElementById('admin-screen').classList.add('hidden');
   document.getElementById('app-screen').classList.remove('hidden');
 }
 
 /* Podświetlenie w dolnej nawigacji dla widoków podrzędnych (np. „Więcej") */
-const NAV_FOR = { home: 'home', pay: 'pay', teo: 'teo', cards: 'cards', more: 'more', subs: 'more', savings: 'more', profile: 'more', stats: 'more', debt: 'more', rewards: 'teo' };
+const NAV_FOR = { home: 'home', pay: 'pay', qr: 'pay', teo: 'teo', cards: 'cards', more: 'more', subs: 'more', savings: 'more', profile: 'more', stats: 'more', debt: 'more', rewards: 'teo' };
 
 function navTo(view) {
   activeView = view;
@@ -213,7 +231,7 @@ function render() {
   const views = {
     home: viewHome, pay: viewPay, cards: viewCards, subs: viewSubs,
     teo: viewTeo, rewards: viewRewards, more: viewMore, savings: viewSavings,
-    profile: viewProfile, stats: viewStats, debt: viewDebt,
+    profile: viewProfile, stats: viewStats, debt: viewDebt, qr: viewQr,
   };
   const c = document.getElementById('view-container');
   try {
@@ -226,7 +244,7 @@ function render() {
   const wires = {
     home: wireHome, pay: wirePay, cards: wireCards, subs: wireSubs,
     teo: wireTeo, rewards: wireRewards, more: wireMore, savings: wireSavings,
-    profile: wireProfile, debt: wireDebt,
+    profile: wireProfile, debt: wireDebt, qr: wireQr,
   };
   if (wires[activeView]) wires[activeView](u);
   window.scrollTo(0, 0);
@@ -323,11 +341,13 @@ function viewPay(u) {
       <div class="field"><label>Tytuł</label><input type="text" id="pay-title" placeholder="Za kawę ☕" ${frozen ? 'disabled' : ''} /></div>
       <button class="btn btn-primary btn-block" id="pay-send" ${others.length && !frozen ? '' : 'disabled'}>Wyślij przelew</button>
     </div>
+    <button class="btn btn-ghost btn-block mt" data-go="qr">📷 Zapłać / odbierz kodem QR</button>
     <div class="section-title">Historia</div>
     <div class="card">${txListHTML(txs)}</div>`;
 }
 
 function wirePay(u) {
+  document.querySelectorAll('[data-go]').forEach(el => el.addEventListener('click', () => navTo(el.dataset.go)));
   document.getElementById('pay-send').addEventListener('click', async () => {
     if (u.frozen) return toast('Karta zamrożona', 'bad');
     const toId = document.getElementById('pay-to').value;
@@ -346,6 +366,68 @@ function wirePay(u) {
     track('transfer', { amount, currency: 'PLN' });
     toast(`Wysłano ${fmt(amount)} do ${recipient.name}`, 'good');
     render();
+  });
+}
+
+/* ---------- Płatności kodem QR ---------- */
+function payCode(u) { return 'TFPAY:' + u.id; }
+
+function renderQR(elId, text) {
+  const el = document.getElementById(elId); if (!el) return;
+  el.innerHTML = '';
+  if (window.QRCode) {
+    try { new QRCode(el, { text, width: 190, height: 190, colorDark: '#0b0f1a', colorLight: '#ffffff' }); return; }
+    catch (e) { /* fallback poniżej */ }
+  }
+  // awaryjnie: obrazek z zewnętrznego generatora
+  const img = new Image();
+  img.width = 190; img.height = 190;
+  img.alt = 'Kod QR';
+  img.src = 'https://api.qrserver.com/v1/create-qr-code/?size=190x190&data=' + encodeURIComponent(text);
+  el.appendChild(img);
+}
+
+function viewQr(u) {
+  const frozen = !!u.frozen;
+  return `
+    <div class="greeting">Płatność QR 📷</div>
+    <div class="greeting-sub">Pokaż kod, by otrzymać przelew</div>
+    <div class="section-title">Mój kod do płatności</div>
+    <div class="card">
+      <div class="qr-box" id="qr-box"></div>
+      <div class="qr-code-text">${esc(payCode(u))}</div>
+      <p class="center muted" style="font-size:12px;margin-top:8px">Inny użytkownik TF CARD skanuje/wpisuje ten kod, aby Ci zapłacić.</p>
+    </div>
+    <div class="section-title">Zapłać kodem</div>
+    <div class="card">
+      ${frozen ? '<p class="muted" style="margin-bottom:10px">❄️ Karta zamrożona — płatności zablokowane.</p>' : ''}
+      <div class="field"><label>Kod odbiorcy (TFPAY:...)</label><input type="text" id="qr-code" placeholder="TFPAY:u-xxxxxxxx" ${frozen ? 'disabled' : ''} /></div>
+      <div class="field"><label>Kwota (PLN)</label><input type="number" id="qr-amount" min="0.01" step="0.01" placeholder="0,00" ${frozen ? 'disabled' : ''} /></div>
+      <button class="btn btn-primary btn-block" id="qr-pay" ${frozen ? 'disabled' : ''}>Zapłać</button>
+    </div>`;
+}
+
+function wireQr(u) {
+  renderQR('qr-box', payCode(u));
+  document.getElementById('qr-pay').addEventListener('click', async () => {
+    if (u.frozen) return toast('Karta zamrożona', 'bad');
+    const raw = document.getElementById('qr-code').value.trim();
+    const amount = parseFloat(document.getElementById('qr-amount').value);
+    const toId = raw.replace(/^TFPAY:/i, '');
+    if (!toId) return toast('Wpisz kod odbiorcy', 'bad');
+    if (!amount || amount <= 0) return toast('Podaj poprawną kwotę', 'bad');
+    if (toId === u.id) return toast('To Twój własny kod', 'bad');
+    const recipient = Store.state().users[toId];
+    if (!recipient) return toast('Nie znaleziono odbiorcy', 'bad');
+    if (amount > num(u.balance)) return toast('Niewystarczające środki', 'bad');
+
+    await Store.updateUser(u.id, { balance: num(u.balance) - amount });
+    await Store.pushTx(u.id, mkTx('out', `Płatność QR do ${recipient.name}`, amount));
+    await Store.updateUser(recipient.id, { balance: num(recipient.balance) + amount });
+    await Store.pushTx(recipient.id, mkTx('in', `Płatność QR od ${u.name}`, amount));
+    track('qr_payment', { amount });
+    toast(`Zapłacono ${fmt(amount)} dla ${recipient.name}`, 'good');
+    navTo('pay');
   });
 }
 
@@ -612,6 +694,7 @@ function viewMore(u) {
     <div class="greeting">Więcej ⋯</div>
     <div class="greeting-sub">Wszystkie funkcje TF CARD</div>
     <div class="card" style="padding:6px 12px">
+      ${item('qr', '📷', 'Płatność QR', 'zapłać/odbierz kodem')}
       ${item('subs', '⭐', 'Subskrypcje', 'PLUS i PRO')}
       ${item('savings', '🏦', 'Skarbonka', `${fmt(u.savings)} odłożone`)}
       ${item('teo', '💎', 'TEOpoints', `${num(u.teo)} punktów`)}
@@ -631,6 +714,7 @@ function wireMore() {
    Panel administratora
    ========================================================================= */
 function showAdmin() {
+  document.getElementById('landing-screen').classList.add('hidden');
   document.getElementById('lock-screen').classList.add('hidden');
   document.getElementById('app-screen').classList.add('hidden');
   document.getElementById('admin-screen').classList.remove('hidden');
@@ -697,6 +781,16 @@ function renderAdmin() {
       <button class="btn btn-ghost btn-sm" id="admin-logout">Wyloguj</button>
     </div>
     <div class="greeting-sub">Sterujesz wszystkimi kontami TF CARD</div>
+    ${Store.backend !== 'firebase' ? `
+    <div class="card" style="border-color:var(--gold);margin-bottom:14px">
+      <b>⚠️ Dokończ konfigurację Firebase</b>
+      <div class="muted" style="font-size:13px;margin-top:6px">Teraz dane są tylko na tym telefonie. Aby działały na wielu:</div>
+      <ol style="margin:8px 0 0 18px;font-size:13px;line-height:1.6">
+        <li>Firebase → <b>Databases &amp; Storage</b> → Firestore → <b>Create database</b> (region eur3, tryb testowy)</li>
+        <li>Firebase → <b>Security</b> → Authentication → <b>Anonymous</b> → Enable</li>
+      </ol>
+    </div>` : `
+    <div class="card" style="border-color:var(--good);margin-bottom:14px">🔒 Firebase połączony — sync na wielu telefonach działa.</div>`}
     <div class="stat-row">
       <div class="stat"><div class="stat-val">${users.length}</div><div class="stat-label">Konta</div></div>
       <div class="stat"><div class="stat-val">${subs}</div><div class="stat-label">Subskrypcje</div></div>

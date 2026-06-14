@@ -18,8 +18,27 @@
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
+  <!-- ============ LANDING (pierwsze uruchomienie) ============ -->
+  <div id="landing-screen" class="screen landing hidden">
+    <div class="landing-inner">
+      <div class="landing-hero">
+        <div class="brand-logo big">TF</div>
+        <h1 class="landing-title">TF CARD</h1>
+        <p class="landing-tag">Twój bank w kieszeni — szybko, bezpiecznie, po Twojemu.</p>
+      </div>
+      <div class="landing-features">
+        <div class="lf"><span>⚡</span><div><b>TF PAY</b><small>Błyskawiczne przelewy i płatności kodem QR</small></div></div>
+        <div class="lf"><span>💎</span><div><b>TEOpoints</b><small>Program lojalnościowy i sklep nagród</small></div></div>
+        <div class="lf"><span>⭐</span><div><b>PLUS i PRO</b><small>Subskrypcje z dodatkowymi korzyściami</small></div></div>
+        <div class="lf"><span>🏦</span><div><b>Skarbonka i więcej</b><small>Oszczędności, karty, statystyki</small></div></div>
+      </div>
+      <button class="btn btn-primary btn-block" id="landing-start">Rozpocznij</button>
+      <div class="landing-foot">Logowanie kodem PIN • PWA na iPhone i Androida</div>
+    </div>
+  </div>
+
   <!-- ============ EKRAN BLOKADY / PIN ============ -->
-  <div id="lock-screen" class="screen lock-screen">
+  <div id="lock-screen" class="screen lock-screen hidden">
     <div class="lock-inner">
       <div class="lock-brand">
         <div class="brand-logo">TF</div>
@@ -89,6 +108,8 @@
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-analytics-compat.js"></script>
+  <!-- Generator kodów QR (płatności) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
   <script src="firebase-config.js"></script>
   <script src="store.js"></script>
   <script src="app.js"></script>

@@ -48,6 +48,25 @@ body {
 .brand-logo.small { width: 40px; height: 40px; font-size: 16px; border-radius: 12px; margin: 0; }
 .brand-name { font-size: 26px; font-weight: 800; letter-spacing: 3px; }
 
+/* =================== LANDING =================== */
+.landing { display: flex; align-items: center; justify-content: center; padding: 30px 22px calc(30px + env(safe-area-inset-bottom)); }
+.landing-inner { width: 100%; max-width: 420px; animation: fade .4s ease; }
+.landing-hero { text-align: center; margin-bottom: 26px; }
+.brand-logo.big { width: 84px; height: 84px; font-size: 34px; border-radius: 24px; margin: 0 auto 16px; }
+.landing-title { font-size: 34px; font-weight: 800; letter-spacing: 3px; }
+.landing-tag { color: var(--muted); font-size: 15px; margin-top: 8px; }
+.landing-features { display: flex; flex-direction: column; gap: 12px; margin-bottom: 24px; }
+.lf { display: flex; align-items: center; gap: 14px; background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 14px; }
+.lf span { font-size: 26px; }
+.lf b { display: block; font-size: 15px; }
+.lf small { color: var(--muted); font-size: 12.5px; }
+.landing-foot { text-align: center; color: var(--muted); font-size: 12px; margin-top: 16px; }
+
+/* =================== QR =================== */
+.qr-box { display: grid; place-items: center; padding: 18px; background: #fff; border-radius: 16px; width: max-content; margin: 0 auto; }
+.qr-box img, .qr-box canvas { display: block; }
+.qr-code-text { text-align: center; font-family: "SFMono-Regular", Menlo, monospace; letter-spacing: 1px; margin-top: 12px; font-size: 14px; word-break: break-all; }
+
 /* =================== EKRAN BLOKADY / PIN =================== */
 .lock-screen { display: flex; align-items: center; justify-content: center; padding: 28px 24px calc(28px + env(safe-area-inset-bottom)); }
 .lock-inner { width: 100%; max-width: 360px; display: flex; flex-direction: column; align-items: center; }
