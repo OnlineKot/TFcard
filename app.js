@@ -922,6 +922,14 @@ function renderAdmin() {
         <button class="btn btn-ghost btn-sm" data-adm="view">Podgląd</button>
         <button class="btn btn-danger btn-sm" data-adm="delete">Usuń konto</button>
       </div>
+      <details class="adm-history">
+        <summary>Historia (${Object.keys(u.transactions || {}).length}) — usuwanie</summary>
+        ${Object.entries(u.transactions || {}).sort((a, b) => b[1].ts - a[1].ts).map(([tid, t]) => `
+          <div class="adm-tx">
+            <div class="adm-tx-main"><b>${esc(t.title)}</b><div class="muted" style="font-size:11px">${(t.type === 'teo_in' || t.type === 'teo_out') ? t.amount + ' 💎' : fmt(t.amount)} • ${fmtDate(t.ts)}</div></div>
+            <button class="btn btn-danger btn-sm" data-deltx="${tid}">Usuń</button>
+          </div>`).join('') || '<div class="empty">Brak wpisów</div>'}
+      </details>
     </div>`).join('');
 
   document.getElementById('admin-container').innerHTML = `
@@ -1010,6 +1018,13 @@ function wireAdmin() {
       el.style.display = el.dataset.name.includes(q) ? '' : 'none';
     });
   });
+
+  document.querySelectorAll('[data-deltx]').forEach(b => b.addEventListener('click', async () => {
+    const uid = b.closest('.admin-user').dataset.uid;
+    if (!confirm('Usunąć ten wpis z historii?')) return;
+    await Store.deleteTx(uid, b.dataset.deltx);
+    toast('Usunięto wpis z historii', 'good'); renderAdmin();
+  }));
 
   // TF Vending — produkty
   document.getElementById('vend-add').addEventListener('click', async () => {
