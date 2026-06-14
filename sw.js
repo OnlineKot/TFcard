@@ -1,5 +1,5 @@
 /* TF CARD — service worker (PWA: instalacja na pulpit + tryb offline powłoki) */
-const CACHE = 'tfcard-v11';
+const CACHE = 'tfcard-v12';
 const ASSETS = [
   './',
   './index.html',

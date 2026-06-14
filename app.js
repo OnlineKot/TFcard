@@ -40,6 +40,44 @@ function toast(msg, kind = '') {
   toast._t = setTimeout(() => { el.className = 'toast ' + kind; }, 2600);
 }
 
+/* Konfetti — animacja świętowania (czysty canvas, bez bibliotek) */
+function celebrate() {
+  if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const cv = document.createElement('canvas');
+  cv.className = 'confetti-cv';
+  document.body.appendChild(cv);
+  const ctx = cv.getContext('2d');
+  const dpr = window.devicePixelRatio || 1;
+  const W = cv.width = innerWidth * dpr, H = cv.height = innerHeight * dpr;
+  cv.style.width = innerWidth + 'px'; cv.style.height = innerHeight + 'px';
+  const colors = ['#6e8bff', '#a06bff', '#2ee6a6', '#f4c45a', '#ff5d7a', '#ffffff'];
+  const N = Math.min(140, Math.floor(innerWidth / 3));
+  const P = Array.from({ length: N }, () => ({
+    x: W / 2 + (Math.random() - .5) * 80 * dpr,
+    y: H * 0.32,
+    vx: (Math.random() - .5) * 11 * dpr,
+    vy: (Math.random() * -10 - 5) * dpr,
+    g: (0.28 + Math.random() * 0.18) * dpr,
+    s: (4 + Math.random() * 6) * dpr,
+    rot: Math.random() * 6.28, vr: (Math.random() - .5) * 0.4,
+    c: colors[(Math.random() * colors.length) | 0],
+  }));
+  const t0 = performance.now();
+  (function frame(t) {
+    const elapsed = t - t0;
+    ctx.clearRect(0, 0, W, H);
+    P.forEach(p => {
+      p.vy += p.g; p.x += p.vx; p.y += p.vy; p.rot += p.vr;
+      ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.rot);
+      ctx.globalAlpha = Math.max(0, 1 - elapsed / 1800);
+      ctx.fillStyle = p.c; ctx.fillRect(-p.s / 2, -p.s / 2, p.s, p.s * 0.5);
+      ctx.restore();
+    });
+    if (elapsed < 1800) requestAnimationFrame(frame);
+    else cv.remove();
+  })(t0);
+}
+
 function currentUser() {
   if (!session || session.type !== 'user') return null;
   return Store.state().users[session.id] || null;
@@ -345,6 +383,7 @@ function wirePay(u) {
     await Store.pushTx(recipient.id, mkTx('in', `Przelew od ${u.name}: ${title}`, amount));
     track('transfer', { amount, currency: 'PLN' });
     toast(`Wysłano ${fmt(amount)} do ${recipient.name}`, 'good');
+    celebrate();
     render();
   });
 }
@@ -407,6 +446,7 @@ function wireQr(u) {
     await Store.pushTx(recipient.id, mkTx('in', `Płatność QR od ${u.name}`, amount));
     track('qr_payment', { amount });
     toast(`Zapłacono ${fmt(amount)} dla ${recipient.name}`, 'good');
+    celebrate();
     navTo('pay');
   });
 }
@@ -480,12 +520,42 @@ function wireTeo() {
   document.querySelectorAll('[data-go]').forEach(el => el.addEventListener('click', () => navTo(el.dataset.go)));
 }
 
-/* ---------- Skarbonka (oszczędności) ---------- */
+/* ---------- Skarbonka + TF Goal (cel oszczędnościowy z postępem) ---------- */
+function ringHTML(pct) {
+  const R = 52, C = 2 * Math.PI * R;
+  const off = C * (1 - Math.min(1, pct));
+  return `
+    <svg class="goal-ring" viewBox="0 0 130 130" width="130" height="130">
+      <circle cx="65" cy="65" r="${R}" fill="none" stroke="var(--line)" stroke-width="12"/>
+      <circle cx="65" cy="65" r="${R}" fill="none" stroke="url(#gg)" stroke-width="12" stroke-linecap="round"
+        stroke-dasharray="${C.toFixed(1)}" stroke-dashoffset="${off.toFixed(1)}" transform="rotate(-90 65 65)"/>
+      <defs><linearGradient id="gg" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0" stop-color="var(--accent)"/><stop offset="1" stop-color="var(--accent-2)"/>
+      </linearGradient></defs>
+      <text x="65" y="60" text-anchor="middle" fill="var(--txt)" font-size="22" font-weight="800">${Math.round(pct * 100)}%</text>
+      <text x="65" y="80" text-anchor="middle" fill="var(--muted)" font-size="11">celu</text>
+    </svg>`;
+}
+
 function viewSavings(u) {
   const txs = txArr(u).filter(t => t.type === 'save' || t.type === 'unsave');
+  const target = num(u.goalTarget);
+  const pct = target > 0 ? num(u.savings) / target : 0;
+  const reached = target > 0 && num(u.savings) >= target;
+  const goalCard = target > 0 ? `
+    <div class="card goal-card">
+      ${ringHTML(pct)}
+      <div class="goal-info">
+        <div class="goal-name">🎯 ${esc(u.goalName || 'Mój cel')}</div>
+        <div class="goal-amounts">${fmt(u.savings)} <span class="muted">/ ${fmt(target)}</span></div>
+        ${reached ? '<div class="badge active-badge" style="margin-top:6px;display:inline-block">Cel osiągnięty! 🎉</div>'
+          : `<div class="muted" style="font-size:12px;margin-top:4px">Brakuje ${fmt(target - num(u.savings))}</div>`}
+      </div>
+    </div>` : '';
   return `
     <div class="greeting">Skarbonka 🏦</div>
-    <div class="greeting-sub">Odkładaj środki na bok</div>
+    <div class="greeting-sub">Odkładaj środki i realizuj cel</div>
+    ${goalCard}
     <div class="row-2">
       <div class="stat"><div class="stat-val">${fmt(u.savings)}</div><div class="stat-label">W skarbonce</div></div>
       <div class="stat"><div class="stat-val">${fmt(u.balance)}</div><div class="stat-label">Na koncie</div></div>
@@ -494,8 +564,17 @@ function viewSavings(u) {
     <div class="card">
       <div class="field"><label>Kwota (PLN)</label><input type="number" id="sav-amount" min="0.01" step="0.01" placeholder="0,00" /></div>
       <div class="row-2">
-        <button class="btn btn-primary" id="sav-in">Wpłać do skarbonki</button>
-        <button class="btn btn-ghost" id="sav-out">Wypłać na konto</button>
+        <button class="btn btn-primary" id="sav-in">Wpłać</button>
+        <button class="btn btn-ghost" id="sav-out">Wypłać</button>
+      </div>
+    </div>
+    <div class="section-title">TF Goal — cel oszczędnościowy</div>
+    <div class="card">
+      <div class="field"><label>Nazwa celu</label><input type="text" id="goal-name" maxlength="40" value="${esc(u.goalName || '')}" placeholder="np. Wakacje 🏖️" /></div>
+      <div class="field"><label>Kwota docelowa (PLN)</label><input type="number" id="goal-target" min="0" step="0.01" value="${target || ''}" placeholder="np. 1000" /></div>
+      <div class="row-2">
+        <button class="btn btn-primary" id="goal-save">Ustaw cel</button>
+        <button class="btn btn-ghost" id="goal-clear">Usuń cel</button>
       </div>
     </div>
     <div class="section-title">Historia</div>
@@ -506,9 +585,12 @@ function wireSavings(u) {
   document.getElementById('sav-in').addEventListener('click', async () => {
     const a = amt(); if (!a || a <= 0) return toast('Podaj kwotę', 'bad');
     if (a > num(u.balance)) return toast('Za mało na koncie', 'bad');
-    await Store.updateUser(u.id, { balance: num(u.balance) - a, savings: num(u.savings) + a });
+    const before = num(u.savings), after = before + a, target = num(u.goalTarget);
+    await Store.updateUser(u.id, { balance: num(u.balance) - a, savings: after });
     await Store.pushTx(u.id, mkTx('save', 'Wpłata do skarbonki', a));
-    toast(`Odłożono ${fmt(a)}`, 'good'); render();
+    if (target > 0 && before < target && after >= target) { toast('Cel osiągnięty! 🎉', 'good'); celebrate(); }
+    else toast(`Odłożono ${fmt(a)}`, 'good');
+    render();
   });
   document.getElementById('sav-out').addEventListener('click', async () => {
     const a = amt(); if (!a || a <= 0) return toast('Podaj kwotę', 'bad');
@@ -516,6 +598,18 @@ function wireSavings(u) {
     await Store.updateUser(u.id, { balance: num(u.balance) + a, savings: num(u.savings) - a });
     await Store.pushTx(u.id, mkTx('unsave', 'Wypłata ze skarbonki', a));
     toast(`Wypłacono ${fmt(a)}`, 'good'); render();
+  });
+  document.getElementById('goal-save').addEventListener('click', async () => {
+    const name = document.getElementById('goal-name').value.trim();
+    const target = parseFloat(document.getElementById('goal-target').value);
+    if (!name) return toast('Podaj nazwę celu', 'bad');
+    if (!target || target <= 0) return toast('Podaj kwotę docelową', 'bad');
+    await Store.updateUser(u.id, { goalName: name, goalTarget: target });
+    toast('Cel ustawiony 🎯', 'good'); render();
+  });
+  document.getElementById('goal-clear').addEventListener('click', async () => {
+    await Store.updateUser(u.id, { goalName: '', goalTarget: 0 });
+    toast('Cel usunięty'); render();
   });
 }
 

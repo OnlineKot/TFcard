@@ -23,6 +23,7 @@ function blankUser(name, pin, opts = {}) {
   return {
     id: uid('u'), name, pin, balance: Number(opts.balance) || 0,
     savings: 0, teo: Number(opts.teo) || 0, debt: 0, frozen: false,
+    goalName: '', goalTarget: 0,
     subs: { plus: !!opts.plus, pro: !!opts.pro },
     cardNumber: genCard(), createdAt: Date.now(), transactions: {},
   };
