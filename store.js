@@ -119,6 +119,11 @@ const Store = {
     if (u && u.transactions) delete u.transactions[txId];
     return this._commit();
   },
+  editTx(id, txId, patch) {
+    const u = this._state.users[id];
+    if (u && u.transactions && u.transactions[txId]) Object.assign(u.transactions[txId], patch);
+    return this._commit();
+  },
 
   newUser(opts) { return blankUser(opts.name, opts.pin, opts); },
   newCard: genCard,
