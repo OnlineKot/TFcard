@@ -178,6 +178,7 @@ async function init() {
   setupKeypad();
   setupNav();
   setupLanding();
+  setupTxModal();
   await Store.init();
   initAnalytics();
   Store.subscribe(onState);
@@ -381,8 +382,16 @@ function render() {
 }
 
 /* ---------- Pulpit ---------- */
+function monthSpend(u) {
+  const now = new Date(), m = now.getMonth(), y = now.getFullYear();
+  return txArr(u).filter(t => {
+    const d = new Date(t.ts);
+    return (t.type === 'out') && d.getMonth() === m && d.getFullYear() === y;
+  }).reduce((s, t) => s + num(t.amount), 0);
+}
 function viewHome(u) {
-  const txs = txArr(u).slice(0, 6);
+  const all = txArr(u);
+  const txs = all.slice(0, 25);
   return `
     <div class="home-head">
       <div class="avatar">${esc(initials(u.name))}</div>
@@ -406,11 +415,13 @@ function viewHome(u) {
       <div class="action" data-go="more"><div class="circle">⋯</div><span>Więcej</span></div>
     </div>
     <div class="mini-row">
+      <div class="mini"><span>📊 Wydatki w tym mies.</span><b>${fmt(monthSpend(u))}</b></div>
       <div class="mini" data-go="teo"><span>💎 TEOpoints</span><b>${num(u.teo)}</b></div>
       <div class="mini" data-go="savings"><span>🏦 Skarbonka</span><b>${fmt(u.savings)}</b></div>
       ${num(u.debt) > 0 ? `<div class="mini debt" data-go="debt"><span>📉 Dług</span><b>${fmt(u.debt)}</b></div>` : ''}
     </div>
-    <div class="section-title">Ostatnie transakcje</div>
+    <div class="section-title">Transakcje</div>
+    <input type="text" id="tx-search" class="admin-search" placeholder="🔎 Szukaj transakcji…" />
     <div class="card">${txListHTML(txs)}</div>`;
 }
 
@@ -421,12 +432,34 @@ function txListHTML(txs) {
     const isIn = t.type === 'in' || t.type === 'teo_in' || t.type === 'unsave';
     const isTeo = t.type === 'teo_in' || t.type === 'teo_out';
     const val = isTeo ? `${t.amount} TEOpoints` : fmt(t.amount);
-    return `<div class="tx">
+    const amt = `${isIn ? '+' : '−'}${val}`;
+    return `<div class="tx" data-txrow data-ico="${TX_ICON[t.type] || '•'}" data-title="${esc(t.title)}" data-desc="${esc(t.desc || '')}" data-amt="${esc(amt)}" data-date="${esc(fmtDate(t.ts))}" data-kind="${isIn ? 'in' : 'out'}">
       <div class="tx-ico">${TX_ICON[t.type] || '•'}</div>
       <div class="tx-main"><div class="tx-title">${esc(t.title)}</div><div class="tx-sub">${t.desc ? esc(t.desc) + ' • ' : ''}${fmtDate(t.ts)}</div></div>
-      <div class="tx-amt ${isIn ? 'in' : ''}">${isIn ? '+' : '−'}${val}</div>
+      <div class="tx-amt ${isIn ? 'in' : ''}">${amt}</div>
     </div>`;
   }).join('') + `</div>`;
+}
+
+/* Modal szczegółów transakcji (Revolut-style) */
+function openTxModal(d) {
+  document.getElementById('txm-ico').textContent = d.ico || '•';
+  const amtEl = document.getElementById('txm-amt');
+  amtEl.textContent = d.amt || '';
+  amtEl.className = 'tx-modal-amt ' + (d.kind === 'in' ? 'in' : '');
+  document.getElementById('txm-title').textContent = d.title || '';
+  document.getElementById('txm-desc').textContent = d.desc || '';
+  document.getElementById('txm-date').textContent = d.date || '';
+  document.getElementById('tx-modal').classList.remove('hidden');
+}
+function setupTxModal() {
+  document.getElementById('tx-modal').addEventListener('click', (e) => {
+    if (e.target.id === 'tx-modal' || e.target.id === 'txm-close') document.getElementById('tx-modal').classList.add('hidden');
+  });
+  document.getElementById('view-container').addEventListener('click', (e) => {
+    const row = e.target.closest('[data-txrow]');
+    if (row) openTxModal(row.dataset);
+  });
 }
 
 function wireHome() {
@@ -435,6 +468,14 @@ function wireHome() {
   document.getElementById('install-btn').addEventListener('click', showInstall);
   const mc = document.getElementById('msg-clear');
   if (mc) mc.addEventListener('click', async () => { await Store.updateUser(currentUser().id, { message: '' }); render(); });
+  const s = document.getElementById('tx-search');
+  if (s) s.addEventListener('input', () => {
+    const q = s.value.trim().toLowerCase();
+    document.querySelectorAll('#view-container .tx').forEach(el => {
+      const hit = (el.dataset.title + ' ' + (el.dataset.desc || '')).toLowerCase().includes(q);
+      el.style.display = hit ? '' : 'none';
+    });
+  });
 }
 
 /* ---------- TF PAY ---------- */
@@ -615,9 +656,7 @@ function subCardHTML(plan, u) {
     <div class="plan ${plan.color}">
       <div class="plan-head">
         <div class="plan-name">${esc(plan.name)} ${active ? '<span class="badge active-badge">AKTYWNA</span>' : badge}</div>
-        <div class="plan-price">${fmt(plan.price)}</div>
       </div>
-      <div class="muted" style="font-size:13px;margin-top:4px">Jednorazowa opłata: <b>${fmt(plan.price)}</b></div>
       <ul class="plan-list">${plan.features.map(f => `<li>${esc(f)}</li>`).join('')}</ul>
       ${action}
     </div>`;
@@ -629,7 +668,7 @@ function viewSubs(u) {
     <div class="greeting-sub">Aktywne: <b>${esc(subLabel(u))}</b></div>
     ${subCardHTML(PLANS.plus, u)}
     ${subCardHTML(PLANS.pro, u)}
-    <p class="center muted" style="font-size:12px;margin-top:6px">PLUS i PRO są niezależne. Aktywuje je administrator (jednorazowa opłata).</p>`;
+    <p class="center muted" style="font-size:12px;margin-top:6px">PLUS i PRO są niezależne. Aktywuje je administrator.</p>`;
 }
 
 function wireSubs() { /* brak akcji użytkownika — subskrypcje nadaje admin */ }
@@ -1242,7 +1281,7 @@ function wireAdmin() {
       await Store.updateUser(u.id, patch);
       await Store.pushTx(u.id, mkTx('out', `Opłata za ${PLANS[key].name}`, price));
       track('sub_grant', { plan: key });
-      toast(`Nadano ${PLANS[key].name} (opłata ${fmt(price)}): ${u.name}`, 'good');
+      toast(`Nadano ${PLANS[key].name}: ${u.name}`, 'good');
     } else if (action === 'revoke') {
       const key = btn.dataset.key;
       await Store.updateUser(u.id, { subs: Object.assign({}, u.subs, { [key]: false }) });

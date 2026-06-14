@@ -110,6 +110,18 @@
 
   <div id="toast" class="toast"></div>
 
+  <!-- Szczegóły transakcji (Revolut-style) -->
+  <div id="tx-modal" class="tx-modal hidden">
+    <div class="tx-modal-card">
+      <div class="tx-modal-ico" id="txm-ico">•</div>
+      <div class="tx-modal-amt" id="txm-amt"></div>
+      <div class="tx-modal-title" id="txm-title"></div>
+      <div class="tx-modal-desc" id="txm-desc"></div>
+      <div class="tx-modal-date" id="txm-date"></div>
+      <button class="btn btn-ghost btn-block mt" id="txm-close">Zamknij</button>
+    </div>
+  </div>
+
   <!-- Firebase SDK (Firestore + Auth + Analytics) -->
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
