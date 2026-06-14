@@ -31,7 +31,7 @@ function blankUser(name, pin, opts = {}) {
 
 /* Dane startowe: brak kont użytkowników (admin zakłada je kreatorem) + PIN admina. */
 function seedState() {
-  return { users: {}, meta: { adminPin: '951852', vending: [] } };
+  return { users: {}, meta: { adminPin: '123159', vending: [] } };
 }
 
 function configReady(cfg) {

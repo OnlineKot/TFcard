@@ -208,7 +208,7 @@ function pinFail(msg) {
 /* Zwraca true, gdy aktualny pinBuf pasuje do PIN-u (admina lub użytkownika). */
 function tryMatch() {
   if (pinMode === 'admin') {
-    if (pinBuf !== (Store.meta().adminPin || '951852')) return false;
+    if (pinBuf !== (Store.meta().adminPin || '123159')) return false;
     session = { type: 'admin' }; saveSession();
     document.getElementById('pin-error').textContent = '';
     setPinMode('user'); showAdmin(); renderAdmin();
@@ -703,7 +703,7 @@ function wireProfile(u) {
   document.getElementById('prof-save').addEventListener('click', async () => {
     const pin = document.getElementById('prof-pin').value.trim();
     if (!/^\d{4,8}$/.test(pin)) return toast('PIN to 4–8 cyfr', 'bad');
-    if (pin === (Store.meta().adminPin || '951852')) return toast('Ten PIN jest zajęty', 'bad');
+    if (pin === (Store.meta().adminPin || '123159')) return toast('Ten PIN jest zajęty', 'bad');
     if (Store.users().some(x => x.id !== u.id && x.pin === pin)) return toast('Ten PIN jest zajęty', 'bad');
     await Store.updateUser(u.id, { pin });
     toast('Zmieniono PIN', 'good');
@@ -938,7 +938,7 @@ function wireAdmin() {
     const pro = document.getElementById('new-pro').checked;
     if (!name) return toast('Podaj imię', 'bad');
     if (!/^\d{4,8}$/.test(pin)) return toast('PIN to 4–8 cyfr', 'bad');
-    if (pin === (Store.meta().adminPin || '951852')) return toast('Ten PIN jest zajęty (admin)', 'bad');
+    if (pin === (Store.meta().adminPin || '123159')) return toast('Ten PIN jest zajęty (admin)', 'bad');
     if (Store.users().some(u => u.pin === pin)) return toast('Ten PIN jest już zajęty', 'bad');
     const u = Store.newUser({ name, pin, balance, plus, pro });
     await Store.setUser(u.id, u);
@@ -1010,7 +1010,7 @@ function wireAdmin() {
     } else if (action === 'setpin') {
       const pin = wrap.querySelector('.adm-pin').value.trim();
       if (!/^\d{4,8}$/.test(pin)) return toast('PIN to 4–8 cyfr', 'bad');
-      if (pin === (Store.meta().adminPin || '951852')) return toast('Ten PIN jest zajęty (admin)', 'bad');
+      if (pin === (Store.meta().adminPin || '123159')) return toast('Ten PIN jest zajęty (admin)', 'bad');
       if (Store.users().some(x => x.id !== u.id && x.pin === pin)) return toast('Ten PIN jest zajęty', 'bad');
       await Store.updateUser(u.id, { pin });
       toast(`Zmieniono PIN: ${u.name}`, 'good');
