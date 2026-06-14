@@ -23,7 +23,7 @@ function blankUser(name, pin, opts = {}) {
   return {
     id: uid('u'), name, pin, balance: Number(opts.balance) || 0,
     savings: 0, teo: Number(opts.teo) || 0, debt: 0, frozen: false,
-    goalName: '', goalTarget: 0,
+    goalName: '', goalTarget: 0, cafeAccess: false,
     subs: { plus: !!opts.plus, pro: !!opts.pro },
     cardNumber: genCard(), createdAt: Date.now(), transactions: {},
   };
@@ -31,7 +31,9 @@ function blankUser(name, pin, opts = {}) {
 
 /* Dane startowe: brak kont użytkowników (admin zakłada je kreatorem) + PIN admina. */
 function seedState() {
-  return { users: {}, meta: { adminPin: '123159', vending: [] } };
+  // PIN administratora NIE jest zapisany w kodzie — ustawia się go przy
+  // pierwszym wejściu w tryb admina (i można zmienić w panelu).
+  return { users: {}, meta: { adminPin: '', vending: [], cafe: [] } };
 }
 
 function configReady(cfg) {

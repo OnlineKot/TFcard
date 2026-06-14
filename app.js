@@ -188,7 +188,10 @@ function setPinMode(mode) {
   pinMode = mode; pinBuf = ''; updateDots();
   document.getElementById('pin-error').textContent = '';
   document.getElementById('lock-screen').classList.toggle('admin', mode === 'admin');
-  document.getElementById('lock-sub').textContent = mode === 'admin' ? 'PIN administratora' : 'Wpisz kod PIN';
+  const noAdminPin = mode === 'admin' && !(Store.meta && Store.meta().adminPin);
+  document.getElementById('lock-sub').textContent = mode === 'admin'
+    ? (noAdminPin ? 'Ustaw nowy PIN administratora' : 'PIN administratora')
+    : 'Wpisz kod PIN';
   document.getElementById('admin-exit').textContent = mode === 'admin' ? '↩' : '';
 }
 
@@ -208,10 +211,18 @@ function pinFail(msg) {
 /* Zwraca true, gdy aktualny pinBuf pasuje do PIN-u (admina lub użytkownika). */
 function tryMatch() {
   if (pinMode === 'admin') {
-    if (pinBuf !== (Store.meta().adminPin || '123159')) return false;
+    const stored = Store.meta().adminPin || '';
+    if (!stored) {
+      // Pierwsze uruchomienie: PIN admina nie jest w kodzie — ustaw go teraz.
+      if (pinBuf.length < PIN_MIN) return false;
+      Store.setMeta({ adminPin: pinBuf });
+      toast('Ustawiono PIN administratora');
+    } else if (pinBuf !== stored) {
+      return false;
+    }
     session = { type: 'admin' }; saveSession();
     document.getElementById('pin-error').textContent = '';
-    setPinMode('user'); showAdmin(); renderAdmin();
+    setPinMode('user'); ensureAdminAccount(); showAdmin(); renderAdmin();
     track('login', { role: 'admin' });
     return true;
   }
@@ -222,6 +233,19 @@ function tryMatch() {
   activeView = 'home'; showApp(); routeRender();
   track('login', { role: 'user' });
   return true;
+}
+
+/* Konto admina (żeby admin też miał saldo, TEOpoints i mógł korzystać z kasy/cafe) */
+function adminAccount() { return Store.users().find(u => u.isAdminAcct) || null; }
+async function ensureAdminAccount() {
+  if (adminAccount()) return;
+  const pin = Store.meta().adminPin;
+  if (!pin) return;
+  const free = !Store.users().some(u => u.pin === pin);
+  const u = Store.newUser({ name: 'Admin', pin: free ? pin : ('9' + Math.floor(1000 + Math.random() * 8999)) });
+  u.isAdminAcct = true;
+  u.subs = { plus: true, pro: true };
+  await Store.setUser(u.id, u);
 }
 
 function saveSession() { localStorage.setItem(SESSION_KEY, JSON.stringify(session)); }
@@ -703,7 +727,7 @@ function wireProfile(u) {
   document.getElementById('prof-save').addEventListener('click', async () => {
     const pin = document.getElementById('prof-pin').value.trim();
     if (!/^\d{4,8}$/.test(pin)) return toast('PIN to 4–8 cyfr', 'bad');
-    if (pin === (Store.meta().adminPin || '123159')) return toast('Ten PIN jest zajęty', 'bad');
+    if (pin === (Store.meta().adminPin)) return toast('Ten PIN jest zajęty', 'bad');
     if (Store.users().some(x => x.id !== u.id && x.pin === pin)) return toast('Ten PIN jest zajęty', 'bad');
     await Store.updateUser(u.id, { pin });
     toast('Zmieniono PIN', 'good');
@@ -755,11 +779,6 @@ function viewMore(u) {
       ${item('debt', '📉', 'Dług', num(u.debt) > 0 ? fmt(u.debt) + ' do spłaty' : 'brak')}
       ${item('stats', '📊', 'Statystyki', 'podsumowanie konta')}
       ${item('profile', '👤', 'Profil', u.frozen ? 'płatności zablokowane' : 'dane, PIN, blokada')}
-      <a class="more-item" href="vending/" style="text-decoration:none;color:inherit">
-        <div class="more-ico">🛍️</div>
-        <div class="more-main"><div class="more-label">Sprzedawca (kasa)</div><div class="more-sub">przyjmuj płatności za produkty</div></div>
-        <div class="more-arrow">›</div>
-      </a>
     </div>
     <button class="btn btn-danger btn-block mt" id="more-logout">Wyloguj</button>`;
 }
@@ -792,6 +811,7 @@ function renderAdmin() {
       <div class="admin-user-top">
         <div>
           <div class="admin-user-name">${esc(u.name)}
+            ${u.isAdminAcct ? '<span class="badge gold">TY (ADMIN)</span>' : ''}
             ${hasSub(u, 'plus') ? '<span class="badge cyan">PLUS</span>' : ''}
             ${hasSub(u, 'pro') ? '<span class="badge gold">PRO</span>' : ''}
             ${!hasSub(u, 'plus') && !hasSub(u, 'pro') ? '<span class="badge active-badge">STANDARD</span>' : ''}
@@ -827,6 +847,7 @@ function renderAdmin() {
         <button class="btn btn-ghost btn-sm" data-adm="rename">Zmień imię</button>
       </div>
       <div class="admin-actions">
+        <button class="btn ${u.cafeAccess ? 'btn-good' : 'btn-ghost'} btn-sm" data-adm="cafe">☕ Cafe: ${u.cafeAccess ? 'TAK' : 'NIE'}</button>
         <button class="btn btn-ghost btn-sm" data-adm="view">Podgląd</button>
         <button class="btn btn-danger btn-sm" data-adm="delete">Usuń konto</button>
       </div>
@@ -838,6 +859,10 @@ function renderAdmin() {
       <button class="btn btn-ghost btn-sm" id="admin-logout">Wyloguj</button>
     </div>
     <div class="greeting-sub">Sterujesz wszystkimi kontami TF CARD</div>
+    <div class="row-2" style="margin-bottom:14px">
+      <a class="btn btn-ghost" href="vending/" style="text-decoration:none">🛍️ Kasa sprzedawcy</a>
+      <a class="btn btn-ghost" href="tfkfcafe/" style="text-decoration:none">☕ TFKF Cafe</a>
+    </div>
     ${Store.backend !== 'firebase' ? `
     <div class="card" style="border-color:var(--gold);margin-bottom:14px">
       <b>⚠️ Dokończ konfigurację Firebase</b>
@@ -938,7 +963,7 @@ function wireAdmin() {
     const pro = document.getElementById('new-pro').checked;
     if (!name) return toast('Podaj imię', 'bad');
     if (!/^\d{4,8}$/.test(pin)) return toast('PIN to 4–8 cyfr', 'bad');
-    if (pin === (Store.meta().adminPin || '123159')) return toast('Ten PIN jest zajęty (admin)', 'bad');
+    if (pin === (Store.meta().adminPin)) return toast('Ten PIN jest zajęty (admin)', 'bad');
     if (Store.users().some(u => u.pin === pin)) return toast('Ten PIN jest już zajęty', 'bad');
     const u = Store.newUser({ name, pin, balance, plus, pro });
     await Store.setUser(u.id, u);
@@ -998,6 +1023,9 @@ function wireAdmin() {
     } else if (action === 'freeze') {
       await Store.updateUser(u.id, { frozen: !u.frozen });
       toast(u.frozen ? `Odblokowano płatności: ${u.name}` : `Zablokowano płatności: ${u.name}`, 'good');
+    } else if (action === 'cafe') {
+      await Store.updateUser(u.id, { cafeAccess: !u.cafeAccess });
+      toast(u.cafeAccess ? `Zabrano dostęp Cafe: ${u.name}` : `Nadano dostęp Cafe: ${u.name}`, 'good');
     } else if (action === 'give') {
       const key = btn.dataset.key;
       await Store.updateUser(u.id, { subs: Object.assign({}, u.subs, { [key]: true }) });
@@ -1010,7 +1038,7 @@ function wireAdmin() {
     } else if (action === 'setpin') {
       const pin = wrap.querySelector('.adm-pin').value.trim();
       if (!/^\d{4,8}$/.test(pin)) return toast('PIN to 4–8 cyfr', 'bad');
-      if (pin === (Store.meta().adminPin || '123159')) return toast('Ten PIN jest zajęty (admin)', 'bad');
+      if (pin === (Store.meta().adminPin)) return toast('Ten PIN jest zajęty (admin)', 'bad');
       if (Store.users().some(x => x.id !== u.id && x.pin === pin)) return toast('Ten PIN jest zajęty', 'bad');
       await Store.updateUser(u.id, { pin });
       toast(`Zmieniono PIN: ${u.name}`, 'good');

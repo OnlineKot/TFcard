@@ -33,7 +33,7 @@ Dane synchronizują się między telefonami przez **Firebase**.
 
 | Konto | PIN | Jak |
 |-------|-----|-----|
-| **Administrator** | `123159` | dotknij napisu „TF CARD", potem wpisz PIN |
+| **Administrator** | ustawiany przy 1. wejściu | dotknij napisu „TF CARD", potem wpisz/ustaw PIN |
 | Użytkownicy | — | zakłada je admin w **Kreatorze kont** (PIN 4–8 cyfr) |
 
 Na start nie ma żadnych kont użytkowników — zaloguj się jako admin i utwórz je
@@ -59,7 +59,9 @@ Bez utworzonej bazy aplikacja działa lokalnie (localStorage, jeden telefon).
   **Authentication → Sign-in method → Anonymous → Włącz**.
 - **Reguły Firestore** — skopiuj zawartość [`firestore.rules`](firestore.rules)
   do **Firestore Database → Rules → Opublikuj** (zastępują otwarty tryb testowy).
-- PIN-y i PIN administratora (domyślnie `123159`) zmienisz w panelu admina.
+- PIN administratora **nie jest zapisany w kodzie** — ustawiasz go przy
+  pierwszym wejściu w tryb admina i zmieniasz w panelu. PIN-y użytkowników
+  również zmienisz w panelu.
 
 > Uwaga: to aplikacja kliencka — pełne bezpieczeństwo danych wymagałoby
 > backendu/Cloud Functions. Reguły + auth podnoszą poprzeczkę, ale nie używaj

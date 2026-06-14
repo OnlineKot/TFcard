@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no" />
+  <meta name="theme-color" content="#000000" />
+  <title>TFKF Cafe</title>
+  <link rel="apple-touch-icon" href="../apple-touch-icon.png" />
+  <link rel="stylesheet" href="../styles.css" />
+  <style>
+    .vend-wrap { max-width: 760px; margin: 0 auto; padding: 22px 16px calc(28px + env(safe-area-inset-bottom)); }
+    .vend-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+    .vend-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-top: 8px; }
+    @media (min-width: 560px) { .vend-grid { grid-template-columns: repeat(3, 1fr); } }
+    .prod { background: var(--card); border: 1px solid var(--line); border-radius: 18px; padding: 16px 12px; text-align: center; display: flex; flex-direction: column; gap: 8px; }
+    .prod-ico { font-size: 42px; line-height: 1; }
+    .prod-name { font-weight: 600; font-size: 14px; }
+    .prod-price { color: var(--gold); font-size: 13px; font-weight: 700; }
+    .prod .free { color: var(--good); }
+    .prod-admin { display: flex; align-items: center; gap: 10px; padding: 10px 2px; border-bottom: 1px solid var(--line); }
+    .prod-admin:last-child { border-bottom: none; }
+    .prod-admin .nm { flex: 1; }
+    .seller-bar { display: flex; align-items: center; justify-content: space-between; gap: 10px; background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 13px 16px; margin: 8px 0 14px; }
+    .pin-login { max-width: 320px; margin: 30px auto; text-align: center; }
+    .pin-login input { width: 100%; text-align: center; letter-spacing: 8px; font-size: 22px; background: var(--bg-2); border: 1px solid var(--line); border-radius: 12px; padding: 14px; color: var(--txt); outline: none; margin: 12px 0; }
+    .confetti-cv { position: fixed; inset: 0; z-index: 90; pointer-events: none; }
+  </style>
+</head>
+<body>
+  <div class="vend-wrap">
+    <div class="vend-head">
+      <div style="display:flex;align-items:center;gap:10px">
+        <div class="brand-logo small">TF</div>
+        <div><div style="font-weight:800;letter-spacing:1px">TFKF CAFE ☕</div><div class="muted" style="font-size:12px">Płatność TEOpoints</div></div>
+      </div>
+      <a href="../" class="btn btn-ghost btn-sm" style="text-decoration:none">← Aplikacja</a>
+    </div>
+    <div id="cafe-storage" class="muted" style="font-size:11px;margin-bottom:8px"></div>
+    <div id="cafe-content"></div>
+  </div>
+
+  <div id="qr-scanner" class="qr-scanner hidden">
+    <video id="qr-video" playsinline></video>
+    <div class="qr-frame"></div>
+    <div class="qr-scan-hint">Skieruj aparat na kod QR klienta</div>
+    <button class="btn btn-ghost" id="qr-scan-close">Anuluj</button>
+  </div>
+
+  <div id="toast" class="toast"></div>
+
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jsQR/1.4.0/jsQR.min.js"></script>
+  <script src="../firebase-config.js"></script>
+  <script src="../store.js"></script>
+  <script>
+    'use strict';
+    const SESSION_KEY = 'tfcard_session_v2';
+    const num = (n) => Number(n) || 0;
+    const esc = (s) => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const cafeProducts = () => Store.meta().cafe || [];
+
+    function toast(msg, kind = '') {
+      const el = document.getElementById('toast');
+      el.textContent = msg; el.className = 'toast show ' + kind;
+      clearTimeout(toast._t);
+      toast._t = setTimeout(() => { el.className = 'toast ' + kind; }, 2600);
+    }
+    function seller() {
+      const s = JSON.parse(localStorage.getItem(SESSION_KEY) || 'null');
+      if (s && s.type === 'user') return Store.state().users[s.id] || null;
+      return null;
+    }
+
+    function render() {
+      document.getElementById('cafe-storage').textContent =
+        Store.backend === 'firebase' ? '🔒 Połączono z chmurą' : '⚠️ Tryb lokalny';
+      const s = seller();
+      const c = document.getElementById('cafe-content');
+      if (!s) {
+        c.innerHTML = `
+          <div class="pin-login">
+            <h3>Zaloguj się jako sprzedawca</h3>
+            <p class="muted" style="font-size:13px">Podaj swój PIN, aby obsługiwać kawiarnię.</p>
+            <input id="vpin" inputmode="numeric" maxlength="8" placeholder="PIN" />
+            <button class="btn btn-primary btn-block" id="vlogin">Zaloguj</button>
+          </div>`;
+        document.getElementById('vlogin').onclick = vlogin;
+        document.getElementById('vpin').addEventListener('keydown', e => { if (e.key === 'Enter') vlogin(); });
+        return;
+      }
+      const prods = cafeProducts();
+      c.innerHTML = `
+        <div class="seller-bar">
+          <div><div class="muted" style="font-size:12px">Sprzedawca</div><div style="font-weight:700">${esc(s.name)}</div></div>
+          <div style="text-align:right"><div class="muted" style="font-size:12px">Twoje TEOpoints</div><div style="font-weight:800">${num(s.teo)} 💎</div></div>
+          <button class="btn btn-ghost btn-sm" id="vlogout">Wyjdź</button>
+        </div>
+        <div class="section-title">Menu — dotknij, by sprzedać</div>
+        ${prods.length ? `<div class="vend-grid">
+          ${prods.map(p => `
+            <div class="prod">
+              <div class="prod-ico">${esc(p.icon || '☕')}</div>
+              <div class="prod-name">${esc(p.name)}</div>
+              <div class="prod-price ${num(p.cost) === 0 ? 'free' : ''}">${num(p.cost) === 0 ? 'Za darmo' : num(p.cost) + ' 💎'}</div>
+              <button class="btn btn-primary btn-sm" data-sell="${p.id}">Sprzedaj</button>
+            </div>`).join('')}
+        </div>` : '<div class="card"><div class="empty">Brak produktów — dodaj poniżej</div></div>'}
+
+        <div class="section-title">Ustaw produkty (sprzedawca)</div>
+        <div class="card">
+          <div class="admin-actions" style="margin:0 0 10px">
+            <input type="text" id="c-emoji" maxlength="2" placeholder="☕" style="max-width:60px;text-align:center" />
+            <input type="text" id="c-name" placeholder="Nazwa" style="max-width:150px" />
+            <input type="number" id="c-cost" min="0" step="1" placeholder="pkt (0=gratis)" style="max-width:120px" />
+            <button class="btn btn-good btn-sm" id="c-add">Dodaj</button>
+          </div>
+          ${prods.length ? prods.map(p => `
+            <div class="prod-admin">
+              <div class="nm">${esc(p.icon || '☕')} ${esc(p.name)} <span class="muted">${num(p.cost) === 0 ? 'gratis' : num(p.cost) + ' 💎'}</span></div>
+              <button class="btn btn-danger btn-sm" data-del="${p.id}">Usuń</button>
+            </div>`).join('') : '<div class="empty">Brak produktów</div>'}
+        </div>`;
+      document.getElementById('vlogout').onclick = () => { localStorage.removeItem(SESSION_KEY); render(); };
+      c.querySelectorAll('[data-sell]').forEach(b => b.onclick = () => sell(b.dataset.sell));
+      c.querySelectorAll('[data-del]').forEach(b => b.onclick = () => delProduct(b.dataset.del));
+      document.getElementById('c-add').onclick = addProduct;
+    }
+
+    function vlogin() {
+      const pin = document.getElementById('vpin').value.trim();
+      const user = Store.users().find(u => u.pin === pin);
+      if (!user) return toast('Błędny PIN', 'bad');
+      if (!user.cafeAccess && !user.isAdminAcct) return toast('Brak dostępu do TFKF Cafe — poproś administratora', 'bad');
+      localStorage.setItem(SESSION_KEY, JSON.stringify({ type: 'user', id: user.id }));
+      render();
+    }
+
+    async function addProduct() {
+      const name = document.getElementById('c-name').value.trim();
+      const cost = Math.max(0, Math.floor(num(document.getElementById('c-cost').value)));
+      const icon = document.getElementById('c-emoji').value.trim() || '☕';
+      if (!name) return toast('Podaj nazwę', 'bad');
+      const list = cafeProducts().slice();
+      list.push({ id: 'c-' + Math.random().toString(36).slice(2, 8), name, cost, icon });
+      await Store.setMeta({ cafe: list });
+      toast(`Dodano: ${name}`, 'good');
+    }
+    async function delProduct(id) {
+      await Store.setMeta({ cafe: cafeProducts().filter(p => p.id !== id) });
+      toast('Usunięto produkt');
+    }
+
+    let pending = null; // produkt do sprzedaży
+    function sell(pid) {
+      const p = cafeProducts().find(x => x.id === pid);
+      if (!p) return;
+      pending = p;
+      if (num(p.cost) === 0) { onCustomer(''); return; } // gratis — wciąż identyfikujemy klienta? nie, wydajemy od razu
+      const code = prompt(`${p.name} — ${num(p.cost)} 💎\n\nWpisz PIN klienta lub kod TFPAY:..., albo OK aby zeskanować QR.`);
+      if (code === null) { startScan(onCustomer); return; }
+      onCustomer(code.trim());
+    }
+
+    async function onCustomer(raw) {
+      const p = pending; const s = seller();
+      if (!p || !s) return;
+      const cost = num(p.cost);
+      if (cost === 0) {
+        await Store.pushTx(s.id, { type: 'teo_in', title: `Cafe gratis: ${p.name}`, amount: 0, ts: Date.now() });
+        toast(`Wydano gratis: ${p.name} ☕`, 'good'); celebrate(); pending = null; return;
+      }
+      const v = (raw || '').trim();
+      let customer = null;
+      if (/^TFPAY:/i.test(v)) customer = Store.state().users[v.replace(/^TFPAY:/i, '')];
+      else if (v) customer = Store.users().find(u => u.pin === v);
+      if (!customer) return toast('Nie znaleziono klienta', 'bad');
+      if (customer.id === s.id) return toast('To Twoje konto', 'bad');
+      if (num(customer.teo) < cost) return toast('Klient ma za mało TEOpoints', 'bad');
+      await Store.updateUser(customer.id, { teo: num(customer.teo) - cost });
+      await Store.pushTx(customer.id, { type: 'teo_out', title: `TFKF Cafe: ${p.name}`, amount: cost, ts: Date.now() });
+      await Store.updateUser(s.id, { teo: num(s.teo) + cost });
+      await Store.pushTx(s.id, { type: 'teo_in', title: `Cafe sprzedaż: ${p.name}`, amount: cost, ts: Date.now() });
+      toast(`Sprzedano: ${p.name} za ${cost} 💎`, 'good'); celebrate(); pending = null;
+    }
+
+    /* skaner QR */
+    let _stream = null, _raf = null;
+    function startScan(onResult) {
+      if (!window.jsQR) return toast('Skaner niedostępny — wpisz PIN klienta', 'bad');
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return toast('Brak dostępu do kamery', 'bad');
+      const overlay = document.getElementById('qr-scanner');
+      const video = document.getElementById('qr-video');
+      overlay.classList.remove('hidden');
+      document.getElementById('qr-scan-close').onclick = stopScan;
+      navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } }).then(stream => {
+        _stream = stream; video.srcObject = stream; video.setAttribute('playsinline', 'true'); video.play();
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
+        const tick = () => {
+          if (!_stream) return;
+          if (video.readyState === video.HAVE_ENOUGH_DATA) {
+            canvas.width = video.videoWidth; canvas.height = video.videoHeight;
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const res = jsQR(img.data, img.width, img.height, { inversionAttempts: 'dontInvert' });
+            if (res && res.data) { const d = res.data; stopScan(); onResult(d); return; }
+          }
+          _raf = requestAnimationFrame(tick);
+        };
+        _raf = requestAnimationFrame(tick);
+      }).catch(() => { overlay.classList.add('hidden'); toast('Nie udało się włączyć kamery', 'bad'); });
+    }
+    function stopScan() {
+      document.getElementById('qr-scanner').classList.add('hidden');
+      if (_raf) { cancelAnimationFrame(_raf); _raf = null; }
+      if (_stream) { _stream.getTracks().forEach(t => t.stop()); _stream = null; }
+      const v = document.getElementById('qr-video'); if (v) v.srcObject = null;
+    }
+
+    function celebrate() {
+      if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+      const cv = document.createElement('canvas'); cv.className = 'confetti-cv'; document.body.appendChild(cv);
+      const ctx = cv.getContext('2d'); const dpr = devicePixelRatio || 1;
+      const W = cv.width = innerWidth * dpr, H = cv.height = innerHeight * dpr;
+      cv.style.width = innerWidth + 'px'; cv.style.height = innerHeight + 'px';
+      const cols = ['#6e8bff', '#a06bff', '#2ee6a6', '#f4c45a', '#ff5d7a', '#fff'];
+      const P = Array.from({ length: 120 }, () => ({ x: W / 2, y: H * .3, vx: (Math.random() - .5) * 11 * dpr, vy: (Math.random() * -10 - 5) * dpr, g: .3 * dpr, s: (4 + Math.random() * 6) * dpr, r: Math.random() * 6, vr: (Math.random() - .5) * .4, c: cols[(Math.random() * cols.length) | 0] }));
+      const t0 = performance.now();
+      (function f(t) {
+        const e = t - t0; ctx.clearRect(0, 0, W, H);
+        P.forEach(p => { p.vy += p.g; p.x += p.vx; p.y += p.vy; p.r += p.vr; ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.r); ctx.globalAlpha = Math.max(0, 1 - e / 1800); ctx.fillStyle = p.c; ctx.fillRect(-p.s / 2, -p.s / 2, p.s, p.s * .5); ctx.restore(); });
+        if (e < 1800) requestAnimationFrame(f); else cv.remove();
+      })(t0);
+    }
+
+    Store.init().then(() => { Store.subscribe(render); render(); });
+  </script>
+</body>
+</html>
