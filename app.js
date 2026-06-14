@@ -23,37 +23,6 @@ const BDAY = { standard: { teo: 25, cash: 0 }, plus: { teo: 100, cash: 25 }, pro
 const CAFE_FACTOR = { standard: 1, plus: 0.90, pro: 0.75 }; // zniżka w Cafe
 function cafeFactor(u) { return CAFE_FACTOR[(u.subs && u.subs.pro) ? 'pro' : (u.subs && u.subs.plus) ? 'plus' : 'standard']; }
 
-/* Cykl subskrypcji: 31 dni; auto-opłata = cena +50% (TEO sam pobiera) */
-const SUB_DAY = 86400000, SUB_DAYS = 31, SUB_RENEW = 1.5;
-function subRenewPrice(key) { return Math.round(PLANS[key].price * SUB_RENEW * 100) / 100; }
-function subDaysLeft(u, key) {
-  const p = u.subPaid && u.subPaid[key];
-  if (!p) return null;
-  return Math.ceil((p + SUB_DAYS * SUB_DAY - Date.now()) / SUB_DAY);
-}
-
-/* Po 31 dniach od opłaty TEO sam pobiera kolejną (cena +50%); brak środków → koniec subskrypcji */
-async function checkSubs() {
-  const u = currentUser(); if (!u) return;
-  for (const key of ['plus', 'pro']) {
-    if (!hasSub(u, key)) continue;
-    const paid = (u.subPaid && u.subPaid[key]) || 0;
-    if (!paid || Date.now() < paid + SUB_DAYS * SUB_DAY) continue;
-    const amount = subRenewPrice(key);
-    const charge = Store.applyCharge(u, amount);
-    if (charge) {
-      await Store.updateUser(u.id, Object.assign({}, charge, { subPaid: Object.assign({}, u.subPaid, { [key]: Date.now() }) }));
-      await Store.pushTx(u.id, mkTx('out', `Opłata subskrypcji ${PLANS[key].name} (+50%)`, amount));
-      toast(`TEO pobrał opłatę ${PLANS[key].name}: ${fmt(amount)}`);
-    } else {
-      await Store.updateUser(u.id, { subs: Object.assign({}, u.subs, { [key]: false }) });
-      await Store.pushTx(u.id, mkTx('out', `${PLANS[key].name} — koniec (brak środków na opłatę)`, 0));
-      toast(`${PLANS[key].name} wygasła — brak środków`, 'bad');
-    }
-    return; // jedna zmiana na cykl
-  }
-}
-
 /* ---------- stan sesji ---------- */
 let session = JSON.parse(localStorage.getItem(SESSION_KEY) || 'null'); // {type:'user',id} | {type:'admin'}
 let activeView = 'home';
@@ -159,8 +128,8 @@ async function checkBirthday() {
   const mmdd = String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0');
   if (u.birthday !== mmdd || u.bdayYear === now.getFullYear()) return;
   const b = BDAY[tierOf(u)];
-  const patch = { bdayYear: now.getFullYear(), teo: num(u.teo) + b.teo };
-  if (b.cash > 0) patch.balance = num(u.balance) + b.cash;
+  const patch = Object.assign({ bdayYear: now.getFullYear(), teo: num(u.teo) + b.teo },
+    b.cash > 0 ? Store.applyCredit(u, b.cash) : {});
   await Store.updateUser(u.id, patch);
   if (b.teo > 0) await Store.pushTx(u.id, mkTx('teo_in', 'Prezent urodzinowy 🎂', b.teo));
   if (b.cash > 0) await Store.pushTx(u.id, mkTx('in', 'Prezent urodzinowy 🎂', b.cash));
@@ -220,7 +189,7 @@ function showStorageMode() {
 /* Reakcja na każdą zmianę danych (również z innego telefonu / od admina) */
 function onState() {
   if (session && session.type === 'user' && !currentUser()) { doLogout(); return; }
-  if (session && session.type === 'user') { showApp(); routeRender(); checkBirthday(); checkSubs(); }
+  if (session && session.type === 'user') { showApp(); routeRender(); checkBirthday(); }
   else if (session && session.type === 'admin') { showAdmin(); renderAdmin(); }
   else if (!localStorage.getItem(LANDING_KEY)) showLanding();
   else showLock();
@@ -320,7 +289,6 @@ async function ensureAdminAccount() {
   const u = Store.newUser({ name: 'Admin', pin: free ? pin : ('9' + Math.floor(1000 + Math.random() * 8999)) });
   u.isAdminAcct = true;
   u.subs = { plus: true, pro: true };
-  u.subPaid = { plus: Date.now(), pro: Date.now() };
   await Store.setUser(u.id, u);
 }
 
@@ -485,7 +453,7 @@ function wirePay(u) {
 
     await Store.updateUser(u.id, charge);
     await Store.pushTx(u.id, mkTx('out', `Przelew do ${recipient.name}: ${title}`, amount));
-    await Store.updateUser(recipient.id, { balance: (recipient.balance || 0) + amount });
+    await Store.updateUser(recipient.id, Store.applyCredit(recipient, amount));
     await Store.pushTx(recipient.id, mkTx('in', `Przelew od ${u.name}: ${title}`, amount));
     track('transfer', { amount, currency: 'PLN' });
     toast(`Wysłano ${fmt(amount)} do ${recipient.name}`, 'good');
@@ -601,7 +569,7 @@ function wireQr(u) {
 
     await Store.updateUser(u.id, charge);
     await Store.pushTx(u.id, mkTx('out', `Płatność QR do ${recipient.name}`, amount));
-    await Store.updateUser(recipient.id, { balance: num(recipient.balance) + amount });
+    await Store.updateUser(recipient.id, Store.applyCredit(recipient, amount));
     await Store.pushTx(recipient.id, mkTx('in', `Płatność QR od ${u.name}`, amount));
     await Store.consumeCode(code); // jednorazowy
     track('qr_payment', { amount });
@@ -625,8 +593,7 @@ function subCardHTML(plan, u) {
         <div class="plan-name">${esc(plan.name)} ${active ? '<span class="badge active-badge">AKTYWNA</span>' : badge}</div>
         <div class="plan-price">${fmt(plan.price)}<small>/mc</small></div>
       </div>
-      <div class="muted" style="font-size:13px;margin-top:4px">Pierwszy miesiąc gratis, potem <b>${fmt(subRenewPrice(key))}</b>/mc (cena +50%)</div>
-      ${active && subDaysLeft(u, key) !== null ? `<div class="muted" style="font-size:12px;margin-top:4px">💸 TEO sam pobierze opłatę ${subDaysLeft(u, key) <= 0 ? 'wkrótce' : 'za ' + subDaysLeft(u, key) + ' dni'}</div>` : ''}
+      <div class="muted" style="font-size:13px;margin-top:4px">Cena: <b>${fmt(plan.price)}</b> miesięcznie</div>
       <ul class="plan-list">${plan.features.map(f => `<li>${esc(f)}</li>`).join('')}</ul>
       ${action}
     </div>`;
@@ -1128,7 +1095,7 @@ function wireAdmin() {
       const amt = parseFloat(wrap.querySelector('.adm-amt').value);
       if (!amt || amt <= 0) return toast('Podaj kwotę', 'bad');
       if (action === 'credit') {
-        await Store.updateUser(u.id, { balance: (u.balance || 0) + amt });
+        await Store.updateUser(u.id, Store.applyCredit(u, amt));
         await Store.pushTx(u.id, mkTx('in', 'Wpłata od TF CARD (admin)', amt));
         toast(`Uznano ${fmt(amt)} dla ${u.name}`, 'good');
       } else {
@@ -1181,10 +1148,7 @@ function wireAdmin() {
       toast(`Ustawiono urodziny: ${u.name} (${d})`, 'good');
     } else if (action === 'give') {
       const key = btn.dataset.key;
-      await Store.updateUser(u.id, {
-        subs: Object.assign({}, u.subs, { [key]: true }),
-        subPaid: Object.assign({}, u.subPaid, { [key]: Date.now() }),
-      });
+      await Store.updateUser(u.id, { subs: Object.assign({}, u.subs, { [key]: true }) });
       track('sub_grant', { plan: key });
       toast(`Nadano ${PLANS[key].name}: ${u.name}`, 'good');
     } else if (action === 'revoke') {

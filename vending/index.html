@@ -187,7 +187,7 @@
       const items = products().filter(p => cart[p.id]).map(p => `${p.name}×${cart[p.id]}`).join(', ');
       await Store.updateUser(customer.id, charge);
       await Store.pushTx(customer.id, { type: 'out', title: `Zakup u ${s.name}: ${items}`, amount: total, ts: Date.now() });
-      await Store.updateUser(s.id, { balance: num(s.balance) + total });
+      await Store.updateUser(s.id, Store.applyCredit(s, total));
       await Store.pushTx(s.id, { type: 'in', title: `Sprzedaż: ${items}`, amount: total, ts: Date.now() });
       if (usedCode) await Store.consumeCode(usedCode);
       toast(`Przyjęto ${fmt(total)} od ${customer.name} ✓`, 'good');

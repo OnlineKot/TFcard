@@ -26,7 +26,6 @@ function blankUser(name, pin, opts = {}) {
     goalName: '', goalTarget: 0, cafeAccess: false,
     birthday: opts.birthday || '', bdayYear: 0,
     subs: { plus: !!opts.plus, pro: !!opts.pro },
-    subPaid: { plus: opts.plus ? Date.now() : 0, pro: opts.pro ? Date.now() : 0 },
     cardNumber: genCard(), createdAt: Date.now(), transactions: {},
   };
 }
@@ -143,6 +142,13 @@ const Store = {
     if (amount > bal + (limit - debt)) return null;
     if (amount <= bal) return { balance: bal - amount };
     return { balance: 0, debt: debt + (amount - bal) }; // brakującą część dopisz do długu
+  },
+  /* Wpływ środków: najpierw spłaca dług, reszta na saldo (łączy dług z zapłatą) */
+  applyCredit(u, amount) {
+    const bal = Number(u.balance) || 0, debt = Number(u.debt) || 0;
+    if (debt <= 0) return { balance: bal + amount };
+    const pay = Math.min(debt, amount);
+    return { balance: bal + (amount - pay), debt: debt - pay };
   },
 
   /* Jednorazowe 6-cyfrowe kody płatności (mapowane na konto w meta.codes) */
