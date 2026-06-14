@@ -32,7 +32,11 @@ const fmtDate = (ts) => new Date(ts).toLocaleDateString('pl-PL', { day: '2-digit
 const esc = (s) => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const txArr = (u) => Object.values(u.transactions || {}).sort((a, b) => b.ts - a.ts);
 const initials = (name) => name.trim().split(/\s+/).map(w => w[0]).join('').slice(0, 2).toUpperCase();
-function mkTx(type, title, amount) { return { type, title, amount: Number(amount), ts: Date.now() }; }
+function mkTx(type, title, amount, desc) {
+  const t = { type, title, amount: Number(amount), ts: Date.now() };
+  if (desc) t.desc = desc;
+  return t;
+}
 
 function toast(msg, kind = '') {
   const el = document.getElementById('toast');
@@ -353,7 +357,7 @@ function txListHTML(txs) {
     const val = isTeo ? `${t.amount} TEOpoints` : fmt(t.amount);
     return `<div class="tx">
       <div class="tx-ico">${TX_ICON[t.type] || '•'}</div>
-      <div class="tx-main"><div class="tx-title">${esc(t.title)}</div><div class="tx-sub">${fmtDate(t.ts)}</div></div>
+      <div class="tx-main"><div class="tx-title">${esc(t.title)}</div><div class="tx-sub">${t.desc ? esc(t.desc) + ' • ' : ''}${fmtDate(t.ts)}</div></div>
       <div class="tx-amt ${isIn ? 'in' : ''}">${isIn ? '+' : '−'}${val}</div>
     </div>`;
   }).join('') + `</div>`;
@@ -834,6 +838,13 @@ function renderAdmin() {
         <button class="btn btn-good btn-sm" data-adm="credit">Uznaj</button>
         <button class="btn btn-danger btn-sm" data-adm="debit">Obciąż</button>
       </div>
+      <div class="admin-actions" style="flex-direction:column;align-items:stretch">
+        <div class="muted" style="font-size:12px">Dodaj zakup do historii</div>
+        <input type="text" class="adm-bt" placeholder="Tytuł (np. Bilet)" />
+        <input type="number" class="adm-bp" min="0" step="0.01" placeholder="Cena zł" />
+        <input type="text" class="adm-bd" placeholder="Opis (opcjonalnie)" />
+        <button class="btn btn-good btn-sm" data-adm="addbuy">Dodaj zakup</button>
+      </div>
       <div class="admin-actions">
         <input type="number" class="adm-teo" placeholder="TEOpoints 💎" style="max-width:120px" />
         <button class="btn btn-good btn-sm" data-adm="teo-add">Dodaj TEOpoints</button>
@@ -1006,6 +1017,15 @@ function wireAdmin() {
         await Store.pushTx(u.id, mkTx('out', 'Obciążenie TF CARD (admin)', amt));
         toast(`Obciążono ${u.name} o ${fmt(amt)}`, 'good');
       }
+    } else if (action === 'addbuy') {
+      const title = wrap.querySelector('.adm-bt').value.trim();
+      const price = parseFloat(wrap.querySelector('.adm-bp').value);
+      const desc = wrap.querySelector('.adm-bd').value.trim();
+      if (!title) return toast('Podaj tytuł', 'bad');
+      if (!price || price < 0) return toast('Podaj cenę', 'bad');
+      await Store.updateUser(u.id, { balance: Math.max(0, num(u.balance) - price) });
+      await Store.pushTx(u.id, mkTx('out', title, price, desc));
+      toast(`Dodano zakup „${title}" dla ${u.name}`, 'good');
     } else if (action === 'teo-add' || action === 'teo-sub') {
       const amt = parseInt(wrap.querySelector('.adm-teo').value, 10);
       if (!amt || amt <= 0) return toast('Podaj liczbę punktów', 'bad');
