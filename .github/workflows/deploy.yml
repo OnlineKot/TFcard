@@ -25,10 +25,6 @@ jobs:
         uses: actions/checkout@v4
       - name: Setup Pages
         uses: actions/configure-pages@v5
-        with:
-          # Automatycznie włącza GitHub Pages (source: GitHub Actions),
-          # więc nie trzeba klikać w ustawieniach repo.
-          enablement: true
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
