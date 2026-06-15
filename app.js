@@ -142,29 +142,6 @@ async function checkDebt() {
   }
 }
 
-/* Opłata miesięczna — po 30 dniach TEO (konto admina) sam pobiera ją od użytkownika */
-const FEE_DAYS = 30;
-async function checkMonthlyFee() {
-  const u = currentUser(); if (!u) return;
-  const fee = num(u.monthlyFee); if (fee <= 0) return;
-  const since = u.feePaidAt || 0;
-  if (!since) { await Store.updateUser(u.id, { feePaidAt: Date.now() }); return; }
-  if (Date.now() < since + FEE_DAYS * DEBT_DAY) return;
-  // pobierz (z debetem; gdy brak środków, brakująca część → dług)
-  const bal = num(u.balance), debt = num(u.debt);
-  const patch = { feePaidAt: since + FEE_DAYS * DEBT_DAY };
-  if (fee <= bal) patch.balance = bal - fee;
-  else { patch.balance = 0; patch.debt = debt + (fee - bal); if (debt === 0) patch.debtSince = Date.now(); }
-  await Store.updateUser(u.id, patch);
-  await Store.pushTx(u.id, mkTx('out', 'Opłata miesięczna (TEO)', fee));
-  const admin = Store.users().find(x => x.isAdminAcct);
-  if (admin && admin.id !== u.id) {
-    await Store.updateUser(admin.id, Store.applyCredit(admin, fee));
-    await Store.pushTx(admin.id, mkTx('in', `Opłata miesięczna od ${u.name}`, fee));
-  }
-  toast(`TEO pobrał opłatę miesięczną ${fmt(fee)}`, 'bad');
-}
-
 /* Prezent urodzinowy — TEOpoints + kasa, raz w roku, zależnie od planu */
 async function checkBirthday() {
   const u = currentUser(); if (!u || !u.birthday) return;
@@ -246,7 +223,7 @@ function onState() {
   showStorageMode(); // odśwież status połączenia (także po samonaprawie sieci)
   if (session && session.type === 'user' && !currentUser()) { doLogout(); return; }
   if (session && session.type === 'user' && currentUser().locked) { toast('Konto zablokowane przez administratora', 'bad'); doLogout(); return; }
-  if (session && session.type === 'user') { showApp(); routeRender(); checkBirthday(); checkDebt(); checkMonthlyFee(); }
+  if (session && session.type === 'user') { showApp(); routeRender(); checkBirthday(); checkDebt(); }
   else if (session && session.type === 'admin') { showAdmin(); renderAdmin(); }
   else if (!localStorage.getItem(LANDING_KEY)) showLanding();
   else showLock();
@@ -1101,11 +1078,6 @@ function renderAdmin() {
         <button class="btn btn-good btn-sm" data-adm="debt-sub">Umorz dług</button>
       </div>
       <div class="admin-actions">
-        <input type="number" class="adm-fee" min="0" step="0.01" placeholder="Opłata/mc zł" value="${num(u.monthlyFee) || ''}" style="max-width:110px" />
-        <button class="btn btn-ghost btn-sm" data-adm="fee">Opłata miesięczna (TEO)</button>
-        <span class="muted" style="font-size:11px">${num(u.monthlyFee) > 0 ? 'co 30 dni' : 'wyłączona'}</span>
-      </div>
-      <div class="admin-actions">
         ${subBtn(u, 'plus')}
         ${subBtn(u, 'pro')}
         <button class="btn btn-ghost btn-sm" data-adm="freeze">${u.frozen ? 'Odblokuj' : 'Zablokuj'} płatności</button>
@@ -1395,10 +1367,6 @@ function wireAdmin() {
         await Store.updateUser(u.id, { debt: left, debtSince: left === 0 ? 0 : (u.debtSince || Date.now()) });
         toast(`Umorzono ${fmt(amt)} długu: ${u.name}`, 'good');
       }
-    } else if (action === 'fee') {
-      const fee = Math.max(0, parseFloat(wrap.querySelector('.adm-fee').value) || 0);
-      await Store.updateUser(u.id, { monthlyFee: fee, feePaidAt: fee > 0 ? Date.now() : 0 });
-      toast(fee > 0 ? `Opłata ${fmt(fee)}/mc dla ${u.name}` : `Wyłączono opłatę: ${u.name}`, 'good');
     } else if (action === 'freeze') {
       await Store.updateUser(u.id, { frozen: !u.frozen });
       toast(u.frozen ? `Odblokowano płatności: ${u.name}` : `Zablokowano płatności: ${u.name}`, 'good');

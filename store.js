@@ -25,7 +25,6 @@ function blankUser(name, pin, opts = {}) {
     savings: 0, teo: Number(opts.teo) || 0, debt: 0, debtSince: 0, frozen: false,
     goalName: '', goalTarget: 0, cafeAccess: false, shopAccess: false, locked: false,
     birthday: opts.birthday || '', bdayYear: 0, message: '', splitReqs: [],
-    monthlyFee: 0, feePaidAt: 0,
     subs: { plus: !!opts.plus, pro: !!opts.pro },
     cardNumber: genCard(), createdAt: Date.now(), transactions: {},
   };
