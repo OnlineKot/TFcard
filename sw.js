@@ -5,7 +5,7 @@
    • ikony/obrazki → cache-first (szybko, rzadko się zmieniają)
    • Firebase / CDN → zawsze sieć (nie cache'ujemy)
 */
-const CACHE = 'tfcard-v31';
+const CACHE = 'tfcard-v32';
 const SHELL = [
   './',
   './index.html',

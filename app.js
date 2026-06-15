@@ -411,7 +411,7 @@ function viewHome(u) {
     <div class="actions-row">
       <div class="action" data-go="pay"><div class="circle">💸</div><span>Wyślij</span></div>
       <div class="action" data-go="qr"><div class="circle">📷</div><span>QR</span></div>
-      <div class="action" data-go="teo"><div class="circle">💎</div><span>TEOpoints</span></div>
+      <div class="action" data-go="teo"><div class="circle">💎</div><span>TEO</span></div>
       <div class="action" data-go="more"><div class="circle">⋯</div><span>Więcej</span></div>
     </div>
     <div class="mini-row">
@@ -1001,7 +1001,7 @@ function renderAdmin() {
 
   const subBtn = (u, key) => hasSub(u, key)
     ? `<button class="btn btn-danger btn-sm" data-adm="revoke" data-key="${key}">Cofnij ${PLANS[key].tier}</button>`
-    : `<button class="btn btn-good btn-sm" data-adm="give" data-key="${key}">Nadaj ${PLANS[key].tier} • ${fmt(PLANS[key].price)}/mc</button>`;
+    : `<button class="btn btn-good btn-sm" data-adm="give" data-key="${key}">Nadaj ${PLANS[key].tier}</button>`;
 
   const usersHTML = users.map(u => `
     <div class="admin-user" data-uid="${u.id}" data-name="${esc(u.name.toLowerCase())}">
