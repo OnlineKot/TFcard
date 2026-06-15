@@ -411,6 +411,11 @@ function viewHome(u) {
     </div>
     ${Store.meta().announce ? `<div class="card" style="border-color:var(--accent);margin-bottom:14px">📢 ${esc(Store.meta().announce)}</div>` : ''}
     ${u.message ? `<div class="card" style="border-color:var(--gold);margin-bottom:14px">✉️ ${esc(u.message)} <button class="btn btn-ghost btn-sm mt" id="msg-clear">OK</button></div>` : ''}
+    ${(u.splitReqs || []).map(r => `
+      <div class="card" style="border-color:var(--accent);margin-bottom:10px">
+        🧾 <b>${esc(r.fromName)}</b> prosi o <b>${fmt(r.amount)}</b> za „${esc(r.title)}"
+        <div class="row-2 mt"><button class="btn btn-good" data-acc="${r.id}">Akceptuj</button><button class="btn btn-ghost" data-dec="${r.id}">Odrzuć</button></div>
+      </div>`).join('')}
     <div class="balance-block">
       <div class="balance-label">Cześć, ${esc(u.name.split(' ')[0])} 👋 • ${new Date().toLocaleDateString('pl-PL', { weekday: 'long', day: 'numeric', month: 'long' })}</div>
       <div class="balance-amount">${fmt(u.balance)}</div>
@@ -478,6 +483,26 @@ function wireHome() {
   document.getElementById('install-btn').addEventListener('click', showInstall);
   const mc = document.getElementById('msg-clear');
   if (mc) mc.addEventListener('click', async () => { await Store.updateUser(currentUser().id, { message: '' }); render(); });
+  document.querySelectorAll('[data-acc]').forEach(b => b.addEventListener('click', async () => {
+    const me = currentUser();
+    const r = (me.splitReqs || []).find(x => x.id === b.dataset.acc);
+    if (!r) return;
+    const charge = Store.applyCharge(me, r.amount);
+    if (!charge) return toast('Za mało środków na akceptację', 'bad');
+    await Store.updateUser(me.id, charge);
+    await Store.pushTx(me.id, mkTx('out', `Split: ${r.title} (dla ${r.fromName})`, r.amount));
+    const from = Store.state().users[r.from];
+    if (from) {
+      await Store.updateUser(from.id, Store.applyCredit(from, r.amount));
+      await Store.pushTx(from.id, mkTx('in', `Split: ${r.title} (od ${me.name})`, r.amount));
+    }
+    await Store.pullReq(me.id, r.id);
+    toast('Zaakceptowano i opłacono', 'good'); celebrate(); render();
+  }));
+  document.querySelectorAll('[data-dec]').forEach(b => b.addEventListener('click', async () => {
+    await Store.pullReq(currentUser().id, b.dataset.dec);
+    toast('Odrzucono prośbę'); render();
+  }));
   const s = document.getElementById('tx-search');
   if (s) s.addEventListener('input', () => {
     const q = s.value.trim().toLowerCase();
@@ -670,8 +695,8 @@ function viewSplit(u) {
       <div class="section-title" style="margin-top:6px">Z kim dzielisz</div>
       <div class="split-list">${list}</div>
       <div id="split-info" class="muted" style="font-size:13px;margin-top:8px"></div>
-      <button class="btn btn-primary btn-block mt" id="split-go" ${others.length ? '' : 'disabled'}>Podziel i pobierz udziały</button>
-      <p class="muted" style="font-size:12px;margin-top:8px">Udział dzielony jest po równo (Ty + zaznaczeni). Od każdego pobierany jest jego udział na Twoje konto.</p>
+      <button class="btn btn-primary btn-block mt" id="split-go" ${others.length ? '' : 'disabled'}>Wyślij prośby o udział</button>
+      <p class="muted" style="font-size:12px;margin-top:8px">Udział dzielony po równo (Ty + zaznaczeni). Każdy dostaje prośbę i musi ją zaakceptować — dopiero wtedy jego udział trafia na Twoje konto.</p>
     </div>`;
 }
 function wireSplit(u) {
@@ -693,22 +718,11 @@ function wireSplit(u) {
     if (!ids.length) return toast('Zaznacz osoby', 'bad');
     if (!total || total <= 0) return toast('Podaj kwotę', 'bad');
     const share = Math.round(total / (ids.length + 1) * 100) / 100;
-    let collected = 0; const failed = [];
     for (const id of ids) {
-      const p = Store.state().users[id];
-      const charge = Store.applyCharge(p, share);
-      if (!charge) { failed.push(p.name); continue; }
-      await Store.updateUser(p.id, charge);
-      await Store.pushTx(p.id, mkTx('out', `Split: ${title} (udział dla ${u.name})`, share));
-      collected += share;
-    }
-    if (collected > 0) {
-      await Store.updateUser(u.id, Store.applyCredit(currentUser(), collected));
-      await Store.pushTx(u.id, mkTx('in', `Split: ${title} (${ids.length - failed.length} osób)`, collected));
+      await Store.pushReq(id, { id: 'sr-' + Math.random().toString(36).slice(2, 9), from: u.id, fromName: u.name, amount: share, title, ts: Date.now() });
     }
     track('split_bill', { total, people: ids.length });
-    toast(`Zebrano ${fmt(collected)}${failed.length ? ' • bez środków: ' + failed.join(', ') : ''}`, failed.length ? 'bad' : 'good');
-    celebrate();
+    toast(`Wysłano prośby do ${ids.length} os. — czekają na akceptację (${fmt(share)}/os.)`, 'good');
     navTo('pay');
   });
 }

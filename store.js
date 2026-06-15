@@ -24,7 +24,7 @@ function blankUser(name, pin, opts = {}) {
     id: uid('u'), name, pin, balance: Number(opts.balance) || 0,
     savings: 0, teo: Number(opts.teo) || 0, debt: 0, debtSince: 0, frozen: false,
     goalName: '', goalTarget: 0, cafeAccess: false,
-    birthday: opts.birthday || '', bdayYear: 0, message: '',
+    birthday: opts.birthday || '', bdayYear: 0, message: '', splitReqs: [],
     subs: { plus: !!opts.plus, pro: !!opts.pro },
     cardNumber: genCard(), createdAt: Date.now(), transactions: {},
   };
@@ -139,6 +139,17 @@ const Store = {
   editTx(id, txId, patch) {
     const u = this._state.users[id];
     if (u && u.transactions && u.transactions[txId]) Object.assign(u.transactions[txId], patch);
+    return this._commit();
+  },
+  /* Prośby Split Bill (do akceptacji przez odbiorcę) */
+  pushReq(id, req) {
+    const u = this._state.users[id]; if (!u) return Promise.resolve();
+    u.splitReqs = (u.splitReqs || []).concat(req);
+    return this._commit();
+  },
+  pullReq(id, reqId) {
+    const u = this._state.users[id]; if (!u) return Promise.resolve();
+    u.splitReqs = (u.splitReqs || []).filter(r => r.id !== reqId);
     return this._commit();
   },
 
