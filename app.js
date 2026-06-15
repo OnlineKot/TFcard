@@ -207,17 +207,7 @@ function showStorageMode() {
   const el = document.getElementById('storage-mode');
   if (Store.backend === 'firebase') { el.textContent = '🔒 Połączono z chmurą'; return; }
   const code = Store.errCode || '199';
-  const msg = {
-    '106': 'Nie można zalogować do chmury — dane zapisują się tylko na tym urządzeniu.',
-    '109': 'Brak odpowiedzi serwera — pracujesz offline, dane na tym urządzeniu.',
-    '151': 'Synchronizacja chwilowo niedostępna — dane na tym urządzeniu.',
-    '167': 'Usługa chwilowo niedostępna — dane na tym urządzeniu.',
-    '172': 'Chmura chwilowo niedostępna — dane na tym urządzeniu.',
-    '188': 'Przekroczono limit usługi — spróbuj później, dane na tym urządzeniu.',
-    '193': 'Brak połączenia z internetem — pracujesz offline, dane na tym urządzeniu.',
-    '199': 'Błąd synchronizacji online — dane zapisują się na tym urządzeniu.',
-  }[code] || 'Błąd synchronizacji online — dane na tym urządzeniu.';
-  el.innerHTML = `⚠️ ${msg} (kod ${code}) <a href="#" id="report-err" style="color:var(--accent)">Zgłoś twórcy</a>`;
+  el.innerHTML = `⚠️ Błąd synchronizacji online — dane na tym urządzeniu (kod ${code}). <a href="#" id="report-err" style="color:var(--accent)">Zgłoś twórcy</a>`;
   const rep = document.getElementById('report-err');
   if (rep) rep.addEventListener('click', async (ev) => {
     ev.preventDefault();
