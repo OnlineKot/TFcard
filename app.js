@@ -122,8 +122,8 @@ function bdayLine(u) {
   return `<div class="muted" style="font-size:12px;margin-top:6px">🎂 ${txt}</div>`;
 }
 
-/* Dług: 31 dni na spłatę, potem co 31 dni rośnie o 50% */
-const DEBT_DAY = 86400000, DEBT_DAYS = 31, DEBT_RATE = 1.5;
+/* Dług: 15 dni na spłatę, potem co 15 dni rośnie o 50% */
+const DEBT_DAY = 86400000, DEBT_DAYS = 15, DEBT_RATE = 1.5;
 function debtDaysLeft(u) {
   if (num(u.debt) <= 0) return null;
   const since = u.debtSince || Date.now();
@@ -140,6 +140,29 @@ async function checkDebt() {
     await Store.pushTx(u.id, mkTx('out', 'Odsetki od długu (+50%)', Math.round((inc - debt) * 100) / 100));
     toast('Naliczono odsetki od długu (+50%)', 'bad');
   }
+}
+
+/* Opłata miesięczna — po 30 dniach TEO (konto admina) sam pobiera ją od użytkownika */
+const FEE_DAYS = 30;
+async function checkMonthlyFee() {
+  const u = currentUser(); if (!u) return;
+  const fee = num(u.monthlyFee); if (fee <= 0) return;
+  const since = u.feePaidAt || 0;
+  if (!since) { await Store.updateUser(u.id, { feePaidAt: Date.now() }); return; }
+  if (Date.now() < since + FEE_DAYS * DEBT_DAY) return;
+  // pobierz (z debetem; gdy brak środków, brakująca część → dług)
+  const bal = num(u.balance), debt = num(u.debt);
+  const patch = { feePaidAt: since + FEE_DAYS * DEBT_DAY };
+  if (fee <= bal) patch.balance = bal - fee;
+  else { patch.balance = 0; patch.debt = debt + (fee - bal); if (debt === 0) patch.debtSince = Date.now(); }
+  await Store.updateUser(u.id, patch);
+  await Store.pushTx(u.id, mkTx('out', 'Opłata miesięczna (TEO)', fee));
+  const admin = Store.users().find(x => x.isAdminAcct);
+  if (admin && admin.id !== u.id) {
+    await Store.updateUser(admin.id, Store.applyCredit(admin, fee));
+    await Store.pushTx(admin.id, mkTx('in', `Opłata miesięczna od ${u.name}`, fee));
+  }
+  toast(`TEO pobrał opłatę miesięczną ${fmt(fee)}`, 'bad');
 }
 
 /* Prezent urodzinowy — TEOpoints + kasa, raz w roku, zależnie od planu */
@@ -221,7 +244,7 @@ function showStorageMode() {
 /* Reakcja na każdą zmianę danych (również z innego telefonu / od admina) */
 function onState() {
   if (session && session.type === 'user' && !currentUser()) { doLogout(); return; }
-  if (session && session.type === 'user') { showApp(); routeRender(); checkBirthday(); checkDebt(); }
+  if (session && session.type === 'user') { showApp(); routeRender(); checkBirthday(); checkDebt(); checkMonthlyFee(); }
   else if (session && session.type === 'admin') { showAdmin(); renderAdmin(); }
   else if (!localStorage.getItem(LANDING_KEY)) showLanding();
   else showLock();
@@ -434,7 +457,7 @@ function viewHome(u) {
       <div class="mini"><span>📊 Wydatki w tym mies.</span><b>${fmt(monthSpend(u))}</b></div>
       <div class="mini" data-go="teo"><span>💎 TEOpoints</span><b>${num(u.teo)}</b></div>
       <div class="mini" data-go="savings"><span>🏦 Skarbonka</span><b>${fmt(u.savings)}</b></div>
-      ${num(u.debt) > 0 ? `<div class="mini debt" data-go="debt"><span>📉 Dług</span><b>${fmt(u.debt)}</b></div>` : ''}
+      ${num(u.debt) > 0 ? `<div class="mini debt" data-go="debt"><span>📉 Dług • ${debtDaysLeft(u) <= 0 ? 'spłać dziś' : debtDaysLeft(u) + ' dni'}</span><b>${fmt(u.debt)}</b></div>` : ''}
     </div>
     <div class="section-title">Transakcje</div>
     <input type="text" id="tx-search" class="admin-search" placeholder="🔎 Szukaj transakcji…" />
@@ -891,7 +914,7 @@ function viewDebt(u) {
       <div class="bankcard-bottom"><span>${esc(u.name.toUpperCase())}</span><span>TF&nbsp;CREDIT</span></div>
     </div>
     ${debt > 0 ? `
-    <div class="card" style="border-color:var(--bad);margin-top:12px">⏳ Spłać w ciągu <b>${debtDaysLeft(u) <= 0 ? '0' : debtDaysLeft(u)} dni</b> — po 31 dniach dług rośnie o <b>50%</b>.</div>
+    <div class="card" style="border-color:var(--bad);margin-top:12px">⏳ Spłać w ciągu <b>${debtDaysLeft(u) <= 0 ? '0' : debtDaysLeft(u)} dni</b> — co 15 dni dług rośnie o <b>50%</b>.</div>
     <div class="section-title">Spłać dług z konta</div>
     <div class="card">
       <div class="field"><label>Kwota spłaty (PLN)</label><input type="number" id="debt-amount" min="0.01" step="0.01" placeholder="0,00" /></div>
@@ -1072,6 +1095,11 @@ function renderAdmin() {
         <input type="number" class="adm-debt" placeholder="Dług zł" style="max-width:90px" />
         <button class="btn btn-danger btn-sm" data-adm="debt-add">Nadaj dług</button>
         <button class="btn btn-good btn-sm" data-adm="debt-sub">Umorz dług</button>
+      </div>
+      <div class="admin-actions">
+        <input type="number" class="adm-fee" min="0" step="0.01" placeholder="Opłata/mc zł" value="${num(u.monthlyFee) || ''}" style="max-width:110px" />
+        <button class="btn btn-ghost btn-sm" data-adm="fee">Opłata miesięczna (TEO)</button>
+        <span class="muted" style="font-size:11px">${num(u.monthlyFee) > 0 ? 'co 30 dni' : 'wyłączona'}</span>
       </div>
       <div class="admin-actions">
         ${subBtn(u, 'plus')}
@@ -1330,7 +1358,11 @@ function wireAdmin() {
       const desc = wrap.querySelector('.adm-bd').value.trim();
       if (!title) return toast('Podaj tytuł', 'bad');
       if (!price || price < 0) return toast('Podaj cenę', 'bad');
-      await Store.updateUser(u.id, { balance: Math.max(0, num(u.balance) - price) });
+      const bal = num(u.balance), debt = num(u.debt);
+      const patch = {};
+      if (price <= bal) patch.balance = bal - price;
+      else { patch.balance = 0; patch.debt = debt + (price - bal); if (debt === 0) patch.debtSince = Date.now(); } // brak środków → dług
+      await Store.updateUser(u.id, patch);
       await Store.pushTx(u.id, mkTx('out', title, price, desc));
       toast(`Dodano zakup „${title}" dla ${u.name}`, 'good');
     } else if (action === 'teo-add' || action === 'teo-sub') {
@@ -1357,6 +1389,10 @@ function wireAdmin() {
         await Store.updateUser(u.id, { debt: left, debtSince: left === 0 ? 0 : (u.debtSince || Date.now()) });
         toast(`Umorzono ${fmt(amt)} długu: ${u.name}`, 'good');
       }
+    } else if (action === 'fee') {
+      const fee = Math.max(0, parseFloat(wrap.querySelector('.adm-fee').value) || 0);
+      await Store.updateUser(u.id, { monthlyFee: fee, feePaidAt: fee > 0 ? Date.now() : 0 });
+      toast(fee > 0 ? `Opłata ${fmt(fee)}/mc dla ${u.name}` : `Wyłączono opłatę: ${u.name}`, 'good');
     } else if (action === 'freeze') {
       await Store.updateUser(u.id, { frozen: !u.frozen });
       toast(u.frozen ? `Odblokowano płatności: ${u.name}` : `Zablokowano płatności: ${u.name}`, 'good');
