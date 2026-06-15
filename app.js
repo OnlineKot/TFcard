@@ -29,6 +29,7 @@ let activeView = 'home';
 let pinMode = 'user';   // 'user' | 'admin'
 let pinBuf = '';
 let myCode = '';        // jednorazowy kod płatności do otrzymania
+let adminOpenHistory = ''; // uid konta z rozwiniętą historią w panelu admina
 
 /* ---------- pomocnicze ---------- */
 const fmt = (n) => new Intl.NumberFormat('pl-PL', { style: 'currency', currency: 'PLN' }).format(Number(n) || 0);
@@ -1097,7 +1098,7 @@ function renderAdmin() {
         <button class="btn btn-ghost btn-sm" data-adm="view">Podgląd</button>
         <button class="btn btn-danger btn-sm" data-adm="delete">Usuń konto</button>
       </div>
-      <details class="adm-history">
+      <details class="adm-history" data-uid="${u.id}" ${adminOpenHistory === u.id ? 'open' : ''}>
         <summary>Historia (${Object.keys(u.transactions || {}).length}) — usuwanie</summary>
         ${Object.entries(u.transactions || {}).sort((a, b) => b[1].ts - a[1].ts).map(([tid, t]) => `
           <div class="adm-tx">
@@ -1120,9 +1121,10 @@ function renderAdmin() {
       <button class="btn btn-ghost btn-sm" id="admin-logout">Wyloguj</button>
     </div>
     <div class="greeting-sub">Sterujesz wszystkimi kontami TF CARD</div>
-    <div class="row-2" style="margin-bottom:14px">
-      <a class="btn btn-ghost" href="vending/" style="text-decoration:none">🛍️ Kasa sprzedawcy</a>
-      <a class="btn btn-ghost" href="tfkfcafe/" style="text-decoration:none">☕ TFKF Cafe</a>
+    <div class="admin-actions" style="margin-bottom:14px">
+      <a class="btn btn-ghost btn-sm" href="vending/" style="text-decoration:none">🛍️ Kasa</a>
+      <a class="btn btn-ghost btn-sm" href="tfkfcafe/" style="text-decoration:none">☕ Cafe</a>
+      <a class="btn btn-ghost btn-sm" href="sklep/" style="text-decoration:none">🛒 Sklep</a>
     </div>
     ${Store.backend !== 'firebase' ? `
     <div class="card" style="border-color:var(--bad);margin-bottom:14px">
@@ -1237,11 +1239,16 @@ function wireAdmin() {
     });
   });
 
+  document.querySelectorAll('details.adm-history').forEach(d => d.addEventListener('toggle', () => {
+    if (d.open) adminOpenHistory = d.dataset.uid;
+    else if (adminOpenHistory === d.dataset.uid) adminOpenHistory = '';
+  }));
   document.querySelectorAll('[data-deltx]').forEach(b => b.addEventListener('click', async () => {
     const uid = b.closest('.admin-user').dataset.uid;
-    if (!confirm('Usunąć ten wpis z historii?')) return;
+    adminOpenHistory = uid;             // utrzymaj rozwiniętą historię
+    b.closest('.adm-tx').remove();      // usuń wiersz od razu (bez zamykania listy)
     await Store.deleteTx(uid, b.dataset.deltx);
-    toast('Usunięto wpis z historii', 'good'); renderAdmin();
+    toast('Usunięto wpis', 'good');
   }));
   document.querySelectorAll('[data-edittx]').forEach(b => b.addEventListener('click', async () => {
     const wrap = b.closest('.admin-user');
@@ -1251,8 +1258,9 @@ function wireAdmin() {
     const ts = new Date(val).getTime();
     if (!title) return toast('Podaj nazwę', 'bad');
     if (!val || isNaN(ts)) return toast('Podaj poprawną datę', 'bad');
+    adminOpenHistory = wrap.dataset.uid;
     await Store.editTx(wrap.dataset.uid, b.dataset.edittx, { title, ts });
-    toast('Zapisano wpis', 'good'); renderAdmin();
+    toast('Zapisano wpis', 'good');
   }));
 
   // TF Vending — produkty

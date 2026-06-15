@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no" />
+  <meta name="theme-color" content="#000000" />
+  <title>TF Sklep</title>
+  <link rel="apple-touch-icon" href="../apple-touch-icon.png" />
+  <link rel="stylesheet" href="../styles.css" />
+  <style>
+    .vend-wrap { max-width: 760px; margin: 0 auto; padding: 22px 16px calc(28px + env(safe-area-inset-bottom)); }
+    .vend-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+    .vend-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-top: 8px; }
+    @media (min-width: 560px) { .vend-grid { grid-template-columns: repeat(3, 1fr); } }
+    .prod { background: var(--card); border: 1px solid var(--line); border-radius: 18px; padding: 16px 12px; text-align: center; display: flex; flex-direction: column; gap: 6px; cursor: pointer; }
+    .prod:active { transform: scale(.97); }
+    .prod-ico { font-size: 40px; line-height: 1; }
+    .prod-name { font-weight: 600; font-size: 14px; }
+    .prod-price { color: var(--muted); font-size: 13px; }
+    .prod-admin { display: flex; align-items: center; gap: 10px; padding: 10px 2px; border-bottom: 1px solid var(--line); }
+    .prod-admin:last-child { border-bottom: none; }
+    .prod-admin .nm { flex: 1; }
+    .seller-bar { display: flex; align-items: center; justify-content: space-between; gap: 10px; background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 13px 16px; margin: 8px 0 14px; }
+    .seller-bal { font-weight: 800; font-size: 18px; }
+    .cart-line { display: flex; align-items: center; gap: 10px; padding: 10px 2px; border-bottom: 1px solid var(--line); }
+    .cart-line:last-child { border-bottom: none; }
+    .cart-line .nm { flex: 1; }
+    .qty { display: flex; align-items: center; gap: 8px; }
+    .qty button { width: 30px; height: 30px; border-radius: 8px; border: 1px solid var(--line); background: var(--card-2); color: var(--txt); font-size: 18px; cursor: pointer; }
+    .total-row { display: flex; justify-content: space-between; align-items: center; font-size: 20px; font-weight: 800; margin-top: 8px; }
+    .pin-login { max-width: 320px; margin: 30px auto; text-align: center; }
+    .pin-login input { width: 100%; text-align: center; letter-spacing: 8px; font-size: 22px; background: var(--bg-2); border: 1px solid var(--line); border-radius: 12px; padding: 14px; color: var(--txt); outline: none; margin: 12px 0; }
+    .confetti-cv { position: fixed; inset: 0; z-index: 90; pointer-events: none; }
+  </style>
+</head>
+<body>
+  <div class="vend-wrap">
+    <div class="vend-head">
+      <div style="display:flex;align-items:center;gap:10px">
+        <div class="brand-logo small">TF</div>
+        <div><div style="font-weight:800;letter-spacing:1px">TF SKLEP 🛒</div><div class="muted" style="font-size:12px">Twój sklep — płatność zł</div></div>
+      </div>
+      <a href="../" class="btn btn-ghost btn-sm" style="text-decoration:none">← Aplikacja</a>
+    </div>
+    <div id="shop-storage" class="muted" style="font-size:11px;margin-bottom:8px"></div>
+    <div id="shop-content"></div>
+  </div>
+
+  <div id="qr-scanner" class="qr-scanner hidden">
+    <video id="qr-video" playsinline></video>
+    <div class="qr-frame"></div>
+    <div class="qr-scan-hint">Skieruj aparat na kod QR klienta</div>
+    <button class="btn btn-ghost" id="qr-scan-close">Anuluj</button>
+  </div>
+
+  <div id="toast" class="toast"></div>
+
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jsQR/1.4.0/jsQR.min.js"></script>
+  <script src="../firebase-config.js"></script>
+  <script src="../store.js"></script>
+  <script>
+    'use strict';
+    const SESSION_KEY = 'tfcard_session_v2';
+    const fmt = (n) => new Intl.NumberFormat('pl-PL', { style: 'currency', currency: 'PLN' }).format(Number(n) || 0);
+    const num = (n) => Number(n) || 0;
+    const esc = (s) => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const products = () => Store.meta().shop || [];
+
+    let cart = {}, charging = false;
+
+    function toast(msg, kind = '') {
+      const el = document.getElementById('toast');
+      el.textContent = msg; el.className = 'toast show ' + kind;
+      clearTimeout(toast._t);
+      toast._t = setTimeout(() => { el.className = 'toast ' + kind; }, 2600);
+    }
+    function seller() {
+      const s = JSON.parse(localStorage.getItem(SESSION_KEY) || 'null');
+      if (s && s.type === 'user') return Store.state().users[s.id] || null;
+      return null;
+    }
+    const cartTotal = () => products().reduce((t, p) => t + (cart[p.id] ? p.price * cart[p.id] : 0), 0);
+    const cartCount = () => Object.values(cart).reduce((a, b) => a + b, 0);
+
+    function render() {
+      document.getElementById('shop-storage').textContent =
+        Store.backend === 'firebase' ? '🔒 Połączono z chmurą' : '⚠️ Tryb lokalny';
+      const s = seller();
+      const c = document.getElementById('shop-content');
+      if (!s) {
+        c.innerHTML = `
+          <div class="pin-login">
+            <h3>Zaloguj się jako sprzedawca</h3>
+            <p class="muted" style="font-size:13px">Podaj swój PIN — wpłaty trafią na Twoje konto.</p>
+            <input id="vpin" inputmode="numeric" maxlength="8" placeholder="PIN" />
+            <button class="btn btn-primary btn-block" id="vlogin">Zaloguj</button>
+          </div>`;
+        document.getElementById('vlogin').onclick = vlogin;
+        document.getElementById('vpin').addEventListener('keydown', e => { if (e.key === 'Enter') vlogin(); });
+        return;
+      }
+      const prods = products();
+      const cartLines = prods.filter(p => cart[p.id]).map(p => `
+        <div class="cart-line">
+          <div class="nm">${esc(p.icon || '🛒')} ${esc(p.name)} <span class="muted">${fmt(p.price)}</span></div>
+          <div class="qty"><button data-dec="${p.id}">−</button><b>${cart[p.id]}</b><button data-inc="${p.id}">+</button></div>
+        </div>`).join('');
+      c.innerHTML = `
+        <div class="seller-bar">
+          <div><div class="muted" style="font-size:12px">Sprzedawca</div><div style="font-weight:700">${esc(s.name)}</div></div>
+          <div style="text-align:right"><div class="muted" style="font-size:12px">Utarg / saldo</div><div class="seller-bal">${fmt(s.balance)}</div></div>
+          <button class="btn btn-ghost btn-sm" id="vlogout">Wyjdź</button>
+        </div>
+        <div class="section-title">Produkty — dotknij, by dodać</div>
+        ${prods.length ? `<div class="vend-grid">
+          ${prods.map(p => `
+            <div class="prod" data-add="${p.id}">
+              <div class="prod-ico">${esc(p.icon || '🛒')}</div>
+              <div class="prod-name">${esc(p.name)}</div>
+              <div class="prod-price">${fmt(p.price)}</div>
+            </div>`).join('')}
+        </div>` : '<div class="card"><div class="empty">Brak produktów — dodaj poniżej</div></div>'}
+        <div class="section-title">Koszyk</div>
+        <div class="card">
+          ${cartCount() ? cartLines : '<div class="empty">Dotknij produkt, aby dodać</div>'}
+          <div class="total-row"><span>Razem</span><span>${fmt(cartTotal())}</span></div>
+          <div class="row-2 mt">
+            <button class="btn btn-primary" id="charge" ${cartCount() ? '' : 'disabled'}>Przyjmij płatność</button>
+            <button class="btn btn-ghost" id="clear" ${cartCount() ? '' : 'disabled'}>Wyczyść</button>
+          </div>
+        </div>
+        ${charging ? `
+        <div class="section-title">Płatność — ${fmt(cartTotal())}</div>
+        <div class="card">
+          <button class="btn btn-primary btn-block" id="do-scan">📷 Skanuj kod QR klienta</button>
+          <div class="field mt"><label>…lub 6-cyfrowy kod / PIN klienta</label><input type="text" id="cust-code" placeholder="kod lub PIN" /></div>
+          <div class="row-2">
+            <button class="btn btn-good" id="do-pay">Pobierz płatność</button>
+            <button class="btn btn-ghost" id="do-cancel">Anuluj</button>
+          </div>
+        </div>` : ''}
+
+        <div class="section-title">Ustaw produkty (sprzedawca)</div>
+        <div class="card">
+          <div class="admin-actions" style="margin:0 0 10px">
+            <input type="text" id="p-emoji" maxlength="2" placeholder="🛒" style="max-width:60px;text-align:center" />
+            <input type="text" id="p-name" placeholder="Nazwa" style="max-width:150px" />
+            <input type="number" id="p-price" min="0.01" step="0.01" placeholder="Cena zł" style="max-width:110px" />
+            <button class="btn btn-good btn-sm" id="p-add">Dodaj</button>
+          </div>
+          ${prods.length ? prods.map(p => `
+            <div class="prod-admin">
+              <div class="nm">${esc(p.icon || '🛒')} ${esc(p.name)} <span class="muted">${fmt(p.price)}</span></div>
+              <button class="btn btn-danger btn-sm" data-del="${p.id}">Usuń</button>
+            </div>`).join('') : '<div class="empty">Brak produktów</div>'}
+        </div>`;
+      document.getElementById('vlogout').onclick = () => { localStorage.removeItem(SESSION_KEY); cart = {}; charging = false; render(); };
+      c.querySelectorAll('[data-add]').forEach(el => el.onclick = () => { cart[el.dataset.add] = (cart[el.dataset.add] || 0) + 1; render(); });
+      c.querySelectorAll('[data-inc]').forEach(el => el.onclick = () => { cart[el.dataset.inc]++; render(); });
+      c.querySelectorAll('[data-dec]').forEach(el => el.onclick = () => { cart[el.dataset.dec]--; if (cart[el.dataset.dec] <= 0) delete cart[el.dataset.dec]; render(); });
+      document.getElementById('clear').onclick = () => { cart = {}; charging = false; render(); };
+      document.getElementById('charge').onclick = () => { if (cartTotal() > 0) { charging = true; render(); } };
+      document.getElementById('p-add').onclick = addProduct;
+      c.querySelectorAll('[data-del]').forEach(b => b.onclick = () => delProduct(b.dataset.del));
+      if (charging) {
+        document.getElementById('do-scan').onclick = () => startScan(onCustomer);
+        document.getElementById('do-pay').onclick = () => onCustomer(document.getElementById('cust-code').value);
+        document.getElementById('do-cancel').onclick = () => { charging = false; render(); };
+      }
+    }
+
+    function vlogin() {
+      const pin = document.getElementById('vpin').value.trim();
+      const user = Store.users().find(u => u.pin === pin);
+      if (!user) return toast('Błędny PIN', 'bad');
+      localStorage.setItem(SESSION_KEY, JSON.stringify({ type: 'user', id: user.id }));
+      render();
+    }
+
+    async function addProduct() {
+      const name = document.getElementById('p-name').value.trim();
+      const price = parseFloat(document.getElementById('p-price').value);
+      const icon = document.getElementById('p-emoji').value.trim() || '🛒';
+      if (!name) return toast('Podaj nazwę', 'bad');
+      if (!price || price <= 0) return toast('Podaj cenę', 'bad');
+      const list = products().slice();
+      list.push({ id: 's-' + Math.random().toString(36).slice(2, 8), name, price, icon });
+      await Store.setMeta({ shop: list });
+      toast(`Dodano: ${name}`, 'good');
+    }
+    async function delProduct(id) {
+      await Store.setMeta({ shop: products().filter(p => p.id !== id) });
+      toast('Usunięto produkt');
+    }
+
+    async function onCustomer(raw) {
+      const total = cartTotal(); const s = seller();
+      if (!s || total <= 0) return;
+      const v = (raw || '').trim();
+      if (!v) return toast('Zeskanuj kod lub wpisz PIN/kod klienta', 'bad');
+      let customer = null, usedCode = null;
+      const digits = v.replace(/\D/g, '');
+      const codeUid = digits.length === 6 ? Store.resolveCode(digits) : null;
+      if (codeUid) { usedCode = digits; customer = Store.state().users[codeUid]; }
+      else customer = Store.users().find(u => u.pin === v);
+      if (!customer) return toast('Nie znaleziono klienta', 'bad');
+      if (customer.id === s.id) return toast('To Twoje konto', 'bad');
+      if (customer.frozen) return toast('Klient ma zablokowane płatności', 'bad');
+      const charge = Store.applyCharge(customer, total);
+      if (!charge) return toast('Klient ma za mało środków (limit debetu)', 'bad');
+      const items = products().filter(p => cart[p.id]).map(p => `${p.name}×${cart[p.id]}`).join(', ');
+      await Store.updateUser(customer.id, charge);
+      await Store.pushTx(customer.id, { type: 'out', title: `Sklep ${s.name}: ${items}`, amount: total, ts: Date.now() });
+      await Store.updateUser(s.id, Store.applyCredit(s, total));
+      await Store.pushTx(s.id, { type: 'in', title: `Sprzedaż: ${items}`, amount: total, ts: Date.now() });
+      if (usedCode) await Store.consumeCode(usedCode);
+      toast(`Przyjęto ${fmt(total)} od ${customer.name} ✓`, 'good');
+      celebrate(); cart = {}; charging = false; render();
+    }
+
+    /* skaner QR */
+    let _stream = null, _raf = null;
+    function startScan(onResult) {
+      if (!window.jsQR) return toast('Skaner niedostępny — wpisz kod klienta', 'bad');
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return toast('Brak dostępu do kamery', 'bad');
+      const overlay = document.getElementById('qr-scanner');
+      const video = document.getElementById('qr-video');
+      overlay.classList.remove('hidden');
+      document.getElementById('qr-scan-close').onclick = stopScan;
+      navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } }).then(stream => {
+        _stream = stream; video.srcObject = stream; video.setAttribute('playsinline', 'true'); video.play();
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
+        const tick = () => {
+          if (!_stream) return;
+          if (video.readyState === video.HAVE_ENOUGH_DATA) {
+            canvas.width = video.videoWidth; canvas.height = video.videoHeight;
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const res = jsQR(img.data, img.width, img.height, { inversionAttempts: 'dontInvert' });
+            if (res && res.data) { const d = res.data; stopScan(); onResult(d); return; }
+          }
+          _raf = requestAnimationFrame(tick);
+        };
+        _raf = requestAnimationFrame(tick);
+      }).catch(() => { overlay.classList.add('hidden'); toast('Nie udało się włączyć kamery', 'bad'); });
+    }
+    function stopScan() {
+      document.getElementById('qr-scanner').classList.add('hidden');
+      if (_raf) { cancelAnimationFrame(_raf); _raf = null; }
+      if (_stream) { _stream.getTracks().forEach(t => t.stop()); _stream = null; }
+      const v = document.getElementById('qr-video'); if (v) v.srcObject = null;
+    }
+
+    function celebrate() {
+      if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+      const cv = document.createElement('canvas'); cv.className = 'confetti-cv'; document.body.appendChild(cv);
+      const ctx = cv.getContext('2d'); const dpr = devicePixelRatio || 1;
+      const W = cv.width = innerWidth * dpr, H = cv.height = innerHeight * dpr;
+      cv.style.width = innerWidth + 'px'; cv.style.height = innerHeight + 'px';
+      const cols = ['#6e8bff', '#a06bff', '#2ee6a6', '#f4c45a', '#ff5d7a', '#fff'];
+      const P = Array.from({ length: 120 }, () => ({ x: W / 2, y: H * .3, vx: (Math.random() - .5) * 11 * dpr, vy: (Math.random() * -10 - 5) * dpr, g: .3 * dpr, s: (4 + Math.random() * 6) * dpr, r: Math.random() * 6, vr: (Math.random() - .5) * .4, c: cols[(Math.random() * cols.length) | 0] }));
+      const t0 = performance.now();
+      (function f(t) {
+        const e = t - t0; ctx.clearRect(0, 0, W, H);
+        P.forEach(p => { p.vy += p.g; p.x += p.vx; p.y += p.vy; p.r += p.vr; ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.r); ctx.globalAlpha = Math.max(0, 1 - e / 1800); ctx.fillStyle = p.c; ctx.fillRect(-p.s / 2, -p.s / 2, p.s, p.s * .5); ctx.restore(); });
+        if (e < 1800) requestAnimationFrame(f); else cv.remove();
+      })(t0);
+    }
+
+    Store.init().then(() => { Store.subscribe(render); render(); });
+  </script>
+</body>
+</html>
