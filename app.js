@@ -1127,9 +1127,10 @@ function renderAdmin() {
       </div>
       <div class="admin-actions">
         <button class="btn ${u.cafeAccess ? 'btn-good' : 'btn-ghost'} btn-sm" data-adm="cafe">☕ Cafe: ${u.cafeAccess ? 'TAK' : 'NIE'}</button>
-        <button class="btn ${u.locked ? 'btn-good' : 'btn-danger'} btn-sm" data-adm="lock">${u.locked ? '🔓 Odblokuj konto' : '🔒 Zablokuj konto'}</button>
+        <button class="btn ${u.shopAccess ? 'btn-good' : 'btn-ghost'} btn-sm" data-adm="shop">🛒 Sklep: ${u.shopAccess ? 'TAK' : 'NIE'}</button>
+        ${u.isAdminAcct ? '' : `<button class="btn ${u.locked ? 'btn-good' : 'btn-danger'} btn-sm" data-adm="lock">${u.locked ? '🔓 Odblokuj konto' : '🔒 Zablokuj konto'}</button>`}
         <button class="btn btn-ghost btn-sm" data-adm="view">Podgląd</button>
-        <button class="btn btn-danger btn-sm" data-adm="delete">Usuń konto</button>
+        ${u.isAdminAcct ? '' : '<button class="btn btn-danger btn-sm" data-adm="delete">Usuń konto</button>'}
       </div>
       <details class="adm-history" data-uid="${u.id}" ${adminOpenHistory === u.id ? 'open' : ''}>
         <summary>Historia (${Object.keys(u.transactions || {}).length}) — usuwanie</summary>
@@ -1406,11 +1407,15 @@ function wireAdmin() {
       await Store.updateUser(u.id, { message: m });
       toast(m ? `Wysłano wiadomość: ${u.name}` : `Wyczyszczono wiadomość: ${u.name}`, 'good');
     } else if (action === 'lock') {
+      if (u.isAdminAcct) return toast('Nie można zablokować konta admina', 'bad');
       await Store.updateUser(u.id, { locked: !u.locked });
       toast(u.locked ? `Odblokowano konto: ${u.name}` : `Zablokowano konto: ${u.name}`, 'good');
     } else if (action === 'cafe') {
       await Store.updateUser(u.id, { cafeAccess: !u.cafeAccess });
       toast(u.cafeAccess ? `Zabrano dostęp Cafe: ${u.name}` : `Nadano dostęp Cafe: ${u.name}`, 'good');
+    } else if (action === 'shop') {
+      await Store.updateUser(u.id, { shopAccess: !u.shopAccess });
+      toast(u.shopAccess ? `Zabrano dostęp Sklep: ${u.name}` : `Nadano dostęp Sklep: ${u.name}`, 'good');
     } else if (action === 'bday') {
       const d = (wrap.querySelector('.adm-bday').value || '').slice(5);
       if (!d) return toast('Wybierz datę', 'bad');
@@ -1448,6 +1453,7 @@ function wireAdmin() {
       activeView = 'home'; showApp(); render();
       toast(`Podgląd konta: ${u.name}`);
     } else if (action === 'delete') {
+      if (u.isAdminAcct) return toast('Nie można usunąć konta admina', 'bad');
       if (!confirm(`Usunąć konto ${u.name}?`)) return;
       await Store.deleteUser(u.id);
       toast('Konto usunięte', 'good');

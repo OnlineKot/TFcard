@@ -176,6 +176,7 @@
       const pin = document.getElementById('vpin').value.trim();
       const user = Store.users().find(u => u.pin === pin);
       if (!user) return toast('Błędny PIN', 'bad');
+      if (!user.shopAccess && !user.isAdminAcct) return toast('Brak dostępu do Sklepu — poproś administratora', 'bad');
       localStorage.setItem(SESSION_KEY, JSON.stringify({ type: 'user', id: user.id }));
       render();
     }
