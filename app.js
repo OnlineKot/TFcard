@@ -1135,6 +1135,7 @@ function renderAdmin() {
     </div>
     <div class="greeting-sub">Sterujesz wszystkimi kontami TF CARD</div>
     <div class="admin-actions" style="margin-bottom:14px">
+      <a class="btn btn-ghost btn-sm" href="apps/" style="text-decoration:none">🧩 Mini-Apps</a>
       <a class="btn btn-ghost btn-sm" href="vending/" style="text-decoration:none">🛍️ Kasa</a>
       <a class="btn btn-ghost btn-sm" href="tfkfcafe/" style="text-decoration:none">☕ Cafe</a>
       <a class="btn btn-ghost btn-sm" href="sklep/" style="text-decoration:none">🛒 Sklep</a>

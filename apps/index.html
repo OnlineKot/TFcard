@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no" />
+  <meta name="theme-color" content="#000000" />
+  <title>TF Mini-Apps</title>
+  <link rel="apple-touch-icon" href="../apple-touch-icon.png" />
+  <link rel="stylesheet" href="../styles.css" />
+  <style>
+    .apps-wrap { max-width: 760px; margin: 0 auto; padding: 24px 16px calc(28px + env(safe-area-inset-bottom)); }
+    .apps-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; }
+    .apps-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    @media (min-width: 600px) { .apps-grid { grid-template-columns: repeat(3, 1fr); } }
+    .app-tile { display: flex; flex-direction: column; gap: 6px; text-decoration: none; color: inherit; background: var(--card); border: 1px solid var(--line); border-radius: 20px; padding: 18px 16px; min-height: 130px; justify-content: space-between; transition: transform .08s; }
+    .app-tile:active { transform: scale(.97); }
+    .app-ico { width: 52px; height: 52px; border-radius: 15px; display: grid; place-items: center; font-size: 26px; background: var(--card-2); }
+    .app-tile.kasa .app-ico { background: linear-gradient(135deg,#2a3766,#4b2f8c); }
+    .app-tile.cafe .app-ico { background: linear-gradient(135deg,#143b4d,#137a6b); }
+    .app-tile.shop .app-ico { background: linear-gradient(135deg,#3a2c1a,#7a5a1f); }
+    .app-name { font-weight: 800; font-size: 16px; }
+    .app-desc { color: var(--muted); font-size: 12.5px; }
+    .soon { opacity: .55; }
+    .soon .app-name::after { content: ' • wkrótce'; font-size: 11px; color: var(--muted); font-weight: 500; }
+  </style>
+</head>
+<body>
+  <div class="apps-wrap">
+    <div class="apps-head">
+      <div style="display:flex;align-items:center;gap:10px">
+        <div class="brand-logo small">TF</div>
+        <div><div style="font-weight:800;letter-spacing:1px">MINI-APPS 🧩</div><div class="muted" style="font-size:12px">Narzędzia ekosystemu TF CARD</div></div>
+      </div>
+      <a href="../" class="btn btn-ghost btn-sm" style="text-decoration:none">← Aplikacja</a>
+    </div>
+    <div class="apps-grid">
+      <a class="app-tile kasa" href="../vending/">
+        <div class="app-ico">🛍️</div>
+        <div><div class="app-name">Kasa</div><div class="app-desc">Sprzedaż produktów (zł). Produkty ustawia admin.</div></div>
+      </a>
+      <a class="app-tile cafe" href="../tfkfcafe/">
+        <div class="app-ico">☕</div>
+        <div><div class="app-name">TFKF Cafe</div><div class="app-desc">Płatność TEOpoints, opcja „za darmo".</div></div>
+      </a>
+      <a class="app-tile shop" href="../sklep/">
+        <div class="app-ico">🛒</div>
+        <div><div class="app-name">Sklep</div><div class="app-desc">Własny sklep sprzedawcy (zł). Sam ustawiasz produkty.</div></div>
+      </a>
+      <a class="app-tile" href="../bilety/">
+        <div class="app-ico" style="background:linear-gradient(135deg,#1b1330,#3a2f5a)">🎟️</div>
+        <div><div class="app-name">Bilety</div><div class="app-desc">Sprzedaż biletów i karnetów — z ładnym biletem.</div></div>
+      </a>
+      <div class="app-tile soon">
+        <div class="app-ico">✅</div>
+        <div><div class="app-name">Zadania</div><div class="app-desc">Zlecenia za kasę / punkty.</div></div>
+      </div>
+      <div class="app-tile soon">
+        <div class="app-ico">🍴</div>
+        <div><div class="app-name">Restauracja</div><div class="app-desc">Zamówienia i rachunki.</div></div>
+      </div>
+    </div>
+    <p class="muted" style="font-size:12px;margin-top:16px;text-align:center">Dostęp do Cafe i Sklepu nadaje administrator. Kasa — dla każdego zalogowanego.</p>
+  </div>
+</body>
+</html>

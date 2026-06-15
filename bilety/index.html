@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no" />
+  <meta name="theme-color" content="#000000" />
+  <title>TF Bilety</title>
+  <link rel="apple-touch-icon" href="../apple-touch-icon.png" />
+  <link rel="stylesheet" href="../styles.css" />
+  <style>
+    .vend-wrap { max-width: 760px; margin: 0 auto; padding: 22px 16px calc(28px + env(safe-area-inset-bottom)); }
+    .vend-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+    .vend-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-top: 8px; }
+    @media (min-width: 560px) { .vend-grid { grid-template-columns: repeat(3, 1fr); } }
+    .prod { background: var(--card); border: 1px solid var(--line); border-radius: 18px; padding: 16px 12px; text-align: center; display: flex; flex-direction: column; gap: 8px; }
+    .prod-ico { font-size: 40px; line-height: 1; }
+    .prod-name { font-weight: 600; font-size: 14px; }
+    .prod-price { color: var(--muted); font-size: 13px; }
+    .prod-admin { display: flex; align-items: center; gap: 10px; padding: 10px 2px; border-bottom: 1px solid var(--line); }
+    .prod-admin:last-child { border-bottom: none; }
+    .prod-admin .nm { flex: 1; }
+    .seller-bar { display: flex; align-items: center; justify-content: space-between; gap: 10px; background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 13px 16px; margin: 8px 0 14px; }
+    .pin-login { max-width: 320px; margin: 30px auto; text-align: center; }
+    .pin-login input { width: 100%; text-align: center; letter-spacing: 8px; font-size: 22px; background: var(--bg-2); border: 1px solid var(--line); border-radius: 12px; padding: 14px; color: var(--txt); outline: none; margin: 12px 0; }
+    .confetti-cv { position: fixed; inset: 0; z-index: 90; pointer-events: none; }
+    /* bilet */
+    .ticket-ov { position: fixed; inset: 0; z-index: 95; background: rgba(0,0,0,.7); display: flex; align-items: center; justify-content: center; padding: 22px; backdrop-filter: blur(4px); }
+    .ticket { width: 100%; max-width: 360px; background: linear-gradient(150deg,#1b1330,#241a3a); border: 1px solid #3a2f5a; border-radius: 22px; overflow: hidden; box-shadow: var(--shadow); animation: slideup .3s ease; }
+    .ticket-top { padding: 22px; text-align: center; position: relative; }
+    .ticket-top::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 0; border-bottom: 2px dashed rgba(255,255,255,.25); }
+    .ticket-stamp { display: inline-block; border: 2px solid var(--good); color: var(--good); border-radius: 8px; padding: 3px 8px; font-size: 11px; font-weight: 800; letter-spacing: 1px; transform: rotate(-6deg); }
+    .ticket-name { font-size: 24px; font-weight: 800; margin: 10px 0 2px; }
+    .ticket-sub { color: var(--muted); font-size: 13px; }
+    .ticket-no { font-family: "SFMono-Regular", Menlo, monospace; letter-spacing: 2px; font-size: 20px; margin-top: 10px; }
+    .ticket-bottom { padding: 16px 22px 20px; display: flex; gap: 10px; }
+  </style>
+</head>
+<body>
+  <div class="vend-wrap">
+    <div class="vend-head">
+      <div style="display:flex;align-items:center;gap:10px">
+        <div class="brand-logo small">TF</div>
+        <div><div style="font-weight:800;letter-spacing:1px">TF BILETY 🎟️</div><div class="muted" style="font-size:12px">Sprzedaż biletów i karnetów</div></div>
+      </div>
+      <a href="../" class="btn btn-ghost btn-sm" style="text-decoration:none">← Aplikacja</a>
+    </div>
+    <div id="b-storage" class="muted" style="font-size:11px;margin-bottom:8px"></div>
+    <div id="b-content"></div>
+  </div>
+
+  <div id="qr-scanner" class="qr-scanner hidden">
+    <video id="qr-video" playsinline></video>
+    <div class="qr-frame"></div>
+    <div class="qr-scan-hint">Skieruj aparat na kod QR klienta</div>
+    <button class="btn btn-ghost" id="qr-scan-close">Anuluj</button>
+  </div>
+
+  <div id="ticket-ov" class="ticket-ov hidden">
+    <div class="ticket">
+      <div class="ticket-top">
+        <div class="ticket-stamp">WAŻNY ✓</div>
+        <div class="ticket-name" id="t-name"></div>
+        <div class="ticket-sub" id="t-sub"></div>
+        <div class="ticket-no" id="t-no"></div>
+      </div>
+      <div class="ticket-bottom"><button class="btn btn-primary btn-block" id="t-ok">Gotowe</button></div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast"></div>
+
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jsQR/1.4.0/jsQR.min.js"></script>
+  <script src="../firebase-config.js"></script>
+  <script src="../store.js"></script>
+  <script>
+    'use strict';
+    const SESSION_KEY = 'tfcard_session_v2';
+    const fmt = (n) => new Intl.NumberFormat('pl-PL', { style: 'currency', currency: 'PLN' }).format(Number(n) || 0);
+    const num = (n) => Number(n) || 0;
+    const esc = (s) => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const tickets = () => Store.meta().tickets || [];
+
+    function toast(msg, kind = '') {
+      const el = document.getElementById('toast');
+      el.textContent = msg; el.className = 'toast show ' + kind;
+      clearTimeout(toast._t); toast._t = setTimeout(() => { el.className = 'toast ' + kind; }, 2600);
+    }
+    function seller() {
+      const s = JSON.parse(localStorage.getItem(SESSION_KEY) || 'null');
+      if (s && s.type === 'user') return Store.state().users[s.id] || null;
+      return null;
+    }
+
+    function render() {
+      document.getElementById('b-storage').textContent =
+        Store.backend === 'firebase' ? '🔒 Połączono z chmurą' : '⚠️ Tryb lokalny';
+      const s = seller();
+      const c = document.getElementById('b-content');
+      if (!s) {
+        c.innerHTML = `
+          <div class="pin-login">
+            <h3>Zaloguj się jako sprzedawca</h3>
+            <p class="muted" style="font-size:13px">Podaj swój PIN — wpłaty trafią na Twoje konto.</p>
+            <input id="vpin" inputmode="numeric" maxlength="8" placeholder="PIN" />
+            <button class="btn btn-primary btn-block" id="vlogin">Zaloguj</button>
+          </div>`;
+        document.getElementById('vlogin').onclick = vlogin;
+        document.getElementById('vpin').addEventListener('keydown', e => { if (e.key === 'Enter') vlogin(); });
+        return;
+      }
+      const ts = tickets();
+      c.innerHTML = `
+        <div class="seller-bar">
+          <div><div class="muted" style="font-size:12px">Sprzedawca</div><div style="font-weight:700">${esc(s.name)}</div></div>
+          <div style="text-align:right"><div class="muted" style="font-size:12px">Utarg / saldo</div><div style="font-weight:800;font-size:18px">${fmt(s.balance)}</div></div>
+          <button class="btn btn-ghost btn-sm" id="vlogout">Wyjdź</button>
+        </div>
+        <div class="section-title">Bilety — dotknij, by sprzedać</div>
+        ${ts.length ? `<div class="vend-grid">
+          ${ts.map(t => `
+            <div class="prod">
+              <div class="prod-ico">${esc(t.icon || '🎟️')}</div>
+              <div class="prod-name">${esc(t.name)}</div>
+              <div class="prod-price">${fmt(t.price)}</div>
+              <button class="btn btn-primary btn-sm" data-sell="${t.id}">Sprzedaj</button>
+            </div>`).join('')}
+        </div>` : '<div class="card"><div class="empty">Brak biletów — dodaj poniżej</div></div>'}
+        <div class="section-title">Ustaw bilety (sprzedawca)</div>
+        <div class="card">
+          <div class="admin-actions" style="margin:0 0 10px">
+            <input type="text" id="t-emoji" maxlength="2" placeholder="🎟️" style="max-width:60px;text-align:center" />
+            <input type="text" id="t-tname" placeholder="Nazwa (np. Koncert)" style="max-width:150px" />
+            <input type="number" id="t-price" min="0.01" step="0.01" placeholder="Cena zł" style="max-width:110px" />
+            <button class="btn btn-good btn-sm" id="t-add">Dodaj</button>
+          </div>
+          ${ts.length ? ts.map(t => `
+            <div class="prod-admin">
+              <div class="nm">${esc(t.icon || '🎟️')} ${esc(t.name)} <span class="muted">${fmt(t.price)}</span></div>
+              <button class="btn btn-danger btn-sm" data-del="${t.id}">Usuń</button>
+            </div>`).join('') : '<div class="empty">Brak biletów</div>'}
+        </div>`;
+      document.getElementById('vlogout').onclick = () => { localStorage.removeItem(SESSION_KEY); render(); };
+      c.querySelectorAll('[data-sell]').forEach(b => b.onclick = () => sell(b.dataset.sell));
+      c.querySelectorAll('[data-del]').forEach(b => b.onclick = () => del(b.dataset.del));
+      document.getElementById('t-add').onclick = addTicket;
+    }
+
+    function vlogin() {
+      const pin = document.getElementById('vpin').value.trim();
+      const user = Store.users().find(u => u.pin === pin);
+      if (!user) return toast('Błędny PIN', 'bad');
+      localStorage.setItem(SESSION_KEY, JSON.stringify({ type: 'user', id: user.id }));
+      render();
+    }
+    async function addTicket() {
+      const name = document.getElementById('t-tname').value.trim();
+      const price = parseFloat(document.getElementById('t-price').value);
+      const icon = document.getElementById('t-emoji').value.trim() || '🎟️';
+      if (!name) return toast('Podaj nazwę', 'bad');
+      if (!price || price <= 0) return toast('Podaj cenę', 'bad');
+      const list = tickets().slice();
+      list.push({ id: 'b-' + Math.random().toString(36).slice(2, 8), name, price, icon });
+      await Store.setMeta({ tickets: list });
+      toast(`Dodano bilet: ${name}`, 'good');
+    }
+    async function del(id) { await Store.setMeta({ tickets: tickets().filter(t => t.id !== id) }); toast('Usunięto bilet'); }
+
+    let pending = null;
+    function sell(id) {
+      const t = tickets().find(x => x.id === id); if (!t) return;
+      pending = t;
+      const code = prompt(`${t.name} — ${fmt(t.price)}\n\nWpisz 6-cyfrowy kod lub PIN klienta, albo OK aby zeskanować QR.`);
+      if (code === null) { startScan(onCustomer); return; }
+      onCustomer(code.trim());
+    }
+    async function onCustomer(raw) {
+      const t = pending, s = seller(); if (!t || !s) return;
+      const v = (raw || '').trim();
+      let customer = null, usedCode = null;
+      const digits = v.replace(/\D/g, '');
+      const codeUid = digits.length === 6 ? Store.resolveCode(digits) : null;
+      if (codeUid) { usedCode = digits; customer = Store.state().users[codeUid]; }
+      else if (v) customer = Store.users().find(u => u.pin === v);
+      if (!customer) return toast('Nie znaleziono klienta', 'bad');
+      if (customer.id === s.id) return toast('To Twoje konto', 'bad');
+      if (customer.frozen) return toast('Klient ma zablokowane płatności', 'bad');
+      const charge = Store.applyCharge(customer, t.price);
+      if (!charge) return toast(num(customer.debt) > 0 ? 'Klient ma dług — nie może płacić' : 'Klient ma za mało środków', 'bad');
+      const no = 'TF-' + Math.random().toString(36).slice(2, 8).toUpperCase();
+      await Store.updateUser(customer.id, charge);
+      await Store.pushTx(customer.id, { type: 'out', title: `🎟️ Bilet: ${t.name} (#${no})`, amount: t.price, ts: Date.now() });
+      await Store.updateUser(s.id, Store.applyCredit(s, t.price));
+      await Store.pushTx(s.id, { type: 'in', title: `Sprzedaż biletu: ${t.name}`, amount: t.price, ts: Date.now() });
+      if (usedCode) await Store.consumeCode(usedCode);
+      showTicket(t, customer, no); celebrate(); pending = null;
+    }
+    function showTicket(t, customer, no) {
+      document.getElementById('t-name').textContent = (t.icon || '🎟️') + ' ' + t.name;
+      document.getElementById('t-sub').textContent = `${customer.name} • ${fmt(t.price)} • ${new Date().toLocaleString('pl-PL')}`;
+      document.getElementById('t-no').textContent = no;
+      document.getElementById('ticket-ov').classList.remove('hidden');
+    }
+    document.getElementById('t-ok').onclick = () => document.getElementById('ticket-ov').classList.add('hidden');
+
+    /* skaner QR */
+    let _stream = null, _raf = null;
+    function startScan(onResult) {
+      if (!window.jsQR) return toast('Skaner niedostępny — wpisz kod klienta', 'bad');
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return toast('Brak dostępu do kamery', 'bad');
+      const overlay = document.getElementById('qr-scanner'); const video = document.getElementById('qr-video');
+      overlay.classList.remove('hidden');
+      document.getElementById('qr-scan-close').onclick = stopScan;
+      navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } }).then(stream => {
+        _stream = stream; video.srcObject = stream; video.setAttribute('playsinline', 'true'); video.play();
+        const canvas = document.createElement('canvas'); const ctx = canvas.getContext('2d', { willReadFrequently: true });
+        const tick = () => {
+          if (!_stream) return;
+          if (video.readyState === video.HAVE_ENOUGH_DATA) {
+            canvas.width = video.videoWidth; canvas.height = video.videoHeight;
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const res = jsQR(img.data, img.width, img.height, { inversionAttempts: 'dontInvert' });
+            if (res && res.data) { const d = res.data; stopScan(); onResult(d); return; }
+          }
+          _raf = requestAnimationFrame(tick);
+        };
+        _raf = requestAnimationFrame(tick);
+      }).catch(() => { overlay.classList.add('hidden'); toast('Nie udało się włączyć kamery', 'bad'); });
+    }
+    function stopScan() {
+      document.getElementById('qr-scanner').classList.add('hidden');
+      if (_raf) { cancelAnimationFrame(_raf); _raf = null; }
+      if (_stream) { _stream.getTracks().forEach(t => t.stop()); _stream = null; }
+      const v = document.getElementById('qr-video'); if (v) v.srcObject = null;
+    }
+    function celebrate() {
+      if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+      const cv = document.createElement('canvas'); cv.className = 'confetti-cv'; document.body.appendChild(cv);
+      const ctx = cv.getContext('2d'); const dpr = devicePixelRatio || 1;
+      const W = cv.width = innerWidth * dpr, H = cv.height = innerHeight * dpr;
+      cv.style.width = innerWidth + 'px'; cv.style.height = innerHeight + 'px';
+      const cols = ['#6e8bff', '#a06bff', '#2ee6a6', '#f4c45a', '#ff5d7a', '#fff'];
+      const P = Array.from({ length: 120 }, () => ({ x: W / 2, y: H * .3, vx: (Math.random() - .5) * 11 * dpr, vy: (Math.random() * -10 - 5) * dpr, g: .3 * dpr, s: (4 + Math.random() * 6) * dpr, r: Math.random() * 6, vr: (Math.random() - .5) * .4, c: cols[(Math.random() * cols.length) | 0] }));
+      const t0 = performance.now();
+      (function f(t) {
+        const e = t - t0; ctx.clearRect(0, 0, W, H);
+        P.forEach(p => { p.vy += p.g; p.x += p.vx; p.y += p.vy; p.r += p.vr; ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.r); ctx.globalAlpha = Math.max(0, 1 - e / 1800); ctx.fillStyle = p.c; ctx.fillRect(-p.s / 2, -p.s / 2, p.s, p.s * .5); ctx.restore(); });
+        if (e < 1800) requestAnimationFrame(f); else cv.remove();
+      })(t0);
+    }
+
+    Store.init().then(() => { Store.subscribe(render); render(); });
+  </script>
+</body>
+</html>
