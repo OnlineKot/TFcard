@@ -179,6 +179,9 @@ async function init() {
   setupNav();
   setupLanding();
   setupTxModal();
+  // Natychmiastowy pierwszy ekran — nie czekamy na Firebase
+  if (!session && !localStorage.getItem(LANDING_KEY)) showLanding();
+  else if (!session) showLock();
   await Store.init();
   initAnalytics();
   Store.subscribe(onState);
@@ -203,8 +206,8 @@ function showLanding() {
 function showStorageMode() {
   const el = document.getElementById('storage-mode');
   el.textContent = Store.backend === 'firebase'
-    ? '🔒 Połączono z chmurą — sync na wielu telefonach'
-    : '⚠️ Tryb lokalny (ten telefon). Uzupełnij firebase-config.js, by włączyć sync.';
+    ? '🔒 Połączono z chmurą'
+    : `⚠️ Błąd synchronizacji online — kod ${Store.errCode || 'TF-INIT-05'}`;
 }
 
 /* Reakcja na każdą zmianę danych (również z innego telefonu / od admina) */

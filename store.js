@@ -47,29 +47,47 @@ const Store = {
   _docRef: null,
   _state: { users: {}, meta: {} },
   _subs: [],
+  errCode: '',
 
   async init() {
     const cfg = window.FIREBASE_CONFIG;
-    if (configReady(cfg) && window.firebase && firebase.firestore) {
+    if (!configReady(cfg) || !window.firebase || !firebase.firestore) {
+      this.errCode = 'TF-CFG-04'; // brak/niepełny config lub SDK
+    } else {
+      let authFailed = false;
       try {
         if (!firebase.apps.length) firebase.initializeApp(cfg);
-        // Bezpieczeństwo: logowanie anonimowe — reguły Firestore wymagają auth
+        // Timeout, żeby UI nie wisiało gdy Firebase nie odpowiada (5 s)
+        const withTimeout = (p, ms) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), ms))]);
+        // Logowanie anonimowe — reguły Firestore wymagają auth
         if (firebase.auth) {
-          try { await firebase.auth().signInAnonymously(); }
-          catch (e) { console.warn('Anonimowe logowanie nieudane (włącz Anonymous w konsoli):', e); }
+          try { await withTimeout(firebase.auth().signInAnonymously(), 5000); }
+          catch (e) { authFailed = true; console.warn('Logowanie nieudane:', e); }
         }
         this._db = firebase.firestore();
         this._docRef = this._db.collection('tfcard').doc('state');
-        const snap = await this._docRef.get();
+        const snap = await withTimeout(this._docRef.get(), 5000);
         if (!snap.exists || !snap.data().users) await this._docRef.set(seedState());
         this.backend = 'firebase';
+        this.errCode = '';
         this._docRef.onSnapshot((s) => {
           this._state = s.data() || { users: {}, meta: {} };
           this._emit();
         });
         return;
       } catch (e) {
-        console.warn('Firebase init nieudany, używam localStorage:', e);
+        // Kody błędów synchronizacji (zapamiętane):
+        //  TF-AUTH-01  logowanie nieudane (np. Anonymous wyłączone)
+        //  TF-NET-02   brak odpowiedzi / timeout (sieć)
+        //  TF-RULE-03  odmowa dostępu (reguły Firestore / brak auth)
+        //  TF-CFG-04   brak/niepełny config lub SDK
+        //  TF-INIT-05  inny błąd inicjalizacji Firebase
+        const msg = (e && (e.code || e.message || '')) + '';
+        if (e && e.message === 'timeout') this.errCode = 'TF-NET-02';
+        else if (/permission-denied|insufficient|PERMISSION/i.test(msg)) this.errCode = authFailed ? 'TF-AUTH-01' : 'TF-RULE-03';
+        else if (authFailed) this.errCode = 'TF-AUTH-01';
+        else this.errCode = 'TF-INIT-05';
+        console.warn('Firebase init nieudany (' + this.errCode + '), localStorage:', e);
       }
     }
     // ---- fallback: localStorage ----
