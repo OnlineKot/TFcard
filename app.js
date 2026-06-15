@@ -1078,12 +1078,12 @@ function renderAdmin() {
         ${Object.entries(u.transactions || {}).sort((a, b) => b[1].ts - a[1].ts).map(([tid, t]) => `
           <div class="adm-tx">
             <div class="adm-tx-main">
-              <b>${esc(t.title)}</b>
+              <input type="text" class="adm-tx-name" value="${esc(t.title)}" />
               <div class="muted" style="font-size:11px">${(t.type === 'teo_in' || t.type === 'teo_out') ? t.amount + ' 💎' : fmt(t.amount)}</div>
               <input type="datetime-local" class="adm-tx-date" value="${dtLocal(t.ts)}" />
             </div>
             <div style="display:flex;flex-direction:column;gap:6px">
-              <button class="btn btn-ghost btn-sm" data-edittx="${tid}">Zapisz datę</button>
+              <button class="btn btn-ghost btn-sm" data-edittx="${tid}">Zapisz</button>
               <button class="btn btn-danger btn-sm" data-deltx="${tid}">Usuń</button>
             </div>
           </div>`).join('') || '<div class="empty">Brak wpisów</div>'}
@@ -1225,11 +1225,14 @@ function wireAdmin() {
   }));
   document.querySelectorAll('[data-edittx]').forEach(b => b.addEventListener('click', async () => {
     const wrap = b.closest('.admin-user');
-    const val = b.closest('.adm-tx').querySelector('.adm-tx-date').value;
+    const row = b.closest('.adm-tx');
+    const val = row.querySelector('.adm-tx-date').value;
+    const title = row.querySelector('.adm-tx-name').value.trim();
     const ts = new Date(val).getTime();
+    if (!title) return toast('Podaj nazwę', 'bad');
     if (!val || isNaN(ts)) return toast('Podaj poprawną datę', 'bad');
-    await Store.editTx(wrap.dataset.uid, b.dataset.edittx, { ts });
-    toast('Zmieniono datę wpisu', 'good'); renderAdmin();
+    await Store.editTx(wrap.dataset.uid, b.dataset.edittx, { title, ts });
+    toast('Zapisano wpis', 'good'); renderAdmin();
   }));
 
   // TF Vending — produkty
