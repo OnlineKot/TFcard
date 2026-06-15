@@ -564,25 +564,34 @@ function wirePay(u) {
 }
 
 /* ---------- Płatności kodem QR (jednorazowy 6-cyfrowy) ---------- */
+const QR_LIB = 'https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js';
+const JSQR_LIB = 'https://cdnjs.cloudflare.com/ajax/libs/jsQR/1.4.0/jsQR.min.js';
+function loadScript(src) {
+  return new Promise((res, rej) => {
+    if (document.querySelector(`script[src="${src}"]`)) return res();
+    const s = document.createElement('script'); s.src = src; s.async = true;
+    s.onload = res; s.onerror = rej; document.head.appendChild(s);
+  });
+}
 
-function renderQR(elId, text) {
+async function renderQR(elId, text) {
   const el = document.getElementById(elId); if (!el) return;
+  if (!window.QRCode) { try { await loadScript(QR_LIB); } catch (e) { /* fallback */ } }
   el.innerHTML = '';
   if (window.QRCode) {
     try { new QRCode(el, { text, width: 190, height: 190, colorDark: '#0b0f1a', colorLight: '#ffffff' }); return; }
     catch (e) { /* fallback poniżej */ }
   }
-  // awaryjnie: obrazek z zewnętrznego generatora
   const img = new Image();
-  img.width = 190; img.height = 190;
-  img.alt = 'Kod QR';
+  img.width = 190; img.height = 190; img.alt = 'Kod QR';
   img.src = 'https://api.qrserver.com/v1/create-qr-code/?size=190x190&data=' + encodeURIComponent(text);
   el.appendChild(img);
 }
 
 /* Skaner QR — kamera + jsQR */
 let _scanStream = null, _scanRAF = null;
-function startScan(onResult) {
+async function startScan(onResult) {
+  if (!window.jsQR) { try { await loadScript(JSQR_LIB); } catch (e) { /* niżej */ } }
   if (!window.jsQR) return toast('Skaner niedostępny — wpisz kod ręcznie', 'bad');
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return toast('Brak dostępu do kamery', 'bad');
   const overlay = document.getElementById('qr-scanner');

@@ -5,7 +5,7 @@
    • ikony/obrazki → cache-first (szybko, rzadko się zmieniają)
    • Firebase / CDN → zawsze sieć (nie cache'ujemy)
 */
-const CACHE = 'tfcard-v38';
+const CACHE = 'tfcard-v39';
 const SHELL = [
   './',
   './index.html',
@@ -52,14 +52,20 @@ self.addEventListener('fetch', (e) => {
   const url = new URL(req.url);
   if (url.origin !== self.location.origin || isExternal(url)) return; // sieć, bez cache
 
-  // stale-while-revalidate: natychmiast z cache, aktualizacja w tle (szybkie ładowanie)
+  const isIcon = /\.(png|svg|ico|jpg|jpeg|webp)$/i.test(url.pathname);
+  if (isIcon) {
+    // ikony: cache-first (rzadko się zmieniają)
+    e.respondWith(caches.match(req).then((c) => c || fetch(req).then((res) => {
+      if (res && res.ok) { const cl = res.clone(); caches.open(CACHE).then((k) => k.put(req, cl)); }
+      return res;
+    })));
+    return;
+  }
+  // HTML/CSS/JS: network-first — zawsze najnowsza wersja online; cache tylko offline
   e.respondWith(
-    caches.match(req).then((cached) => {
-      const net = fetch(req).then((res) => {
-        if (res && res.ok) { const cl = res.clone(); caches.open(CACHE).then((c) => c.put(req, cl)); }
-        return res;
-      }).catch(() => cached || caches.match('./index.html'));
-      return cached || net;
-    })
+    fetch(req).then((res) => {
+      if (res && res.ok) { const cl = res.clone(); caches.open(CACHE).then((c) => c.put(req, cl)); }
+      return res;
+    }).catch(() => caches.match(req).then((c) => c || caches.match('./index.html')))
   );
 });
