@@ -238,6 +238,12 @@ body {
 .ios-close { position: absolute; top: 16px; right: 16px; background: var(--card-2); border: none; color: var(--txt); width: 32px; height: 32px; border-radius: 50%; font-size: 14px; cursor: pointer; }
 .share-ico { display: inline-block; }
 
+/* =================== SPLIT BILL =================== */
+.split-list { display: flex; flex-direction: column; gap: 8px; }
+.split-row { display: flex; align-items: center; gap: 10px; background: var(--bg-2); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; font-size: 14px; cursor: pointer; }
+.split-row input { width: 18px; height: 18px; }
+.avatar.sm { width: 28px; height: 28px; font-size: 12px; border-radius: 50%; }
+
 /* =================== MODAL TRANSAKCJI =================== */
 .tx-modal { position: fixed; inset: 0; z-index: 85; background: rgba(0,0,0,.6); display: flex; align-items: flex-end; justify-content: center; backdrop-filter: blur(4px); }
 .tx-modal-card { width: 100%; max-width: 480px; background: var(--card); border: 1px solid var(--line); border-top-left-radius: 24px; border-top-right-radius: 24px; padding: 26px 22px calc(26px + env(safe-area-inset-bottom)); text-align: center; animation: slideup .25s ease; }

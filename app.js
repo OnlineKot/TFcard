@@ -330,7 +330,7 @@ function showApp() {
 }
 
 /* Podświetlenie w dolnej nawigacji dla widoków podrzędnych (np. „Więcej") */
-const NAV_FOR = { home: 'home', pay: 'pay', qr: 'pay', teo: 'teo', more: 'more', subs: 'more', savings: 'more', profile: 'more', stats: 'more', debt: 'more' };
+const NAV_FOR = { home: 'home', pay: 'pay', qr: 'pay', split: 'pay', teo: 'teo', more: 'more', subs: 'more', savings: 'more', profile: 'more', stats: 'more', debt: 'more' };
 
 function navTo(view) {
   activeView = view;
@@ -362,7 +362,7 @@ function render() {
   const views = {
     home: viewHome, pay: viewPay, subs: viewSubs,
     teo: viewTeo, more: viewMore, savings: viewSavings,
-    profile: viewProfile, stats: viewStats, debt: viewDebt, qr: viewQr,
+    profile: viewProfile, stats: viewStats, debt: viewDebt, qr: viewQr, split: viewSplit,
   };
   const c = document.getElementById('view-container');
   try {
@@ -375,7 +375,7 @@ function render() {
   const wires = {
     home: wireHome, pay: wirePay, subs: wireSubs,
     teo: wireTeo, more: wireMore, savings: wireSavings,
-    profile: wireProfile, debt: wireDebt, qr: wireQr,
+    profile: wireProfile, debt: wireDebt, qr: wireQr, split: wireSplit,
   };
   if (wires[activeView]) wires[activeView](u);
   window.scrollTo(0, 0);
@@ -498,6 +498,7 @@ function viewPay(u) {
       <button class="btn btn-primary btn-block" id="pay-send" ${others.length && !frozen ? '' : 'disabled'}>Wyślij przelew</button>
     </div>
     <button class="btn btn-ghost btn-block mt" data-go="qr">📷 Zapłać / odbierz kodem QR</button>
+    <button class="btn btn-ghost btn-block mt" data-go="split">🧾 Podziel rachunek (Split Bill)</button>
     <div class="section-title">Historia</div>
     <div class="card">${txListHTML(txs)}</div>`;
 }
@@ -639,6 +640,64 @@ function wireQr(u) {
     await Store.consumeCode(code); // jednorazowy
     track('qr_payment', { amount });
     toast(`Zapłacono ${fmt(amount)} dla ${recipient.name}`, 'good');
+    celebrate();
+    navTo('pay');
+  });
+}
+
+/* ---------- Split Bill — podziel rachunek równo między konta ---------- */
+function viewSplit(u) {
+  const others = Store.users().filter(x => x.id !== u.id);
+  const list = others.length
+    ? others.map(o => `<label class="split-row"><input type="checkbox" class="split-pick" value="${o.id}" /> <span class="avatar sm">${esc(initials(o.name))}</span> ${esc(o.name)}</label>`).join('')
+    : '<div class="empty">Brak innych kont</div>';
+  return `
+    <div class="greeting">Podziel rachunek 🧾</div>
+    <div class="greeting-sub">Rozbij kwotę równo — każdy odda swój udział</div>
+    <div class="card">
+      <div class="field"><label>Kwota całkowita (PLN)</label><input type="number" id="split-total" min="0.01" step="0.01" placeholder="0,00" /></div>
+      <div class="field"><label>Tytuł</label><input type="text" id="split-title" placeholder="np. Pizza 🍕" /></div>
+      <div class="section-title" style="margin-top:6px">Z kim dzielisz</div>
+      <div class="split-list">${list}</div>
+      <div id="split-info" class="muted" style="font-size:13px;margin-top:8px"></div>
+      <button class="btn btn-primary btn-block mt" id="split-go" ${others.length ? '' : 'disabled'}>Podziel i pobierz udziały</button>
+      <p class="muted" style="font-size:12px;margin-top:8px">Udział dzielony jest po równo (Ty + zaznaczeni). Od każdego pobierany jest jego udział na Twoje konto.</p>
+    </div>`;
+}
+function wireSplit(u) {
+  const recalc = () => {
+    const n = document.querySelectorAll('.split-pick:checked').length;
+    const total = parseFloat(document.getElementById('split-total').value) || 0;
+    const info = document.getElementById('split-info');
+    if (total > 0 && n > 0) {
+      const share = Math.round(total / (n + 1) * 100) / 100;
+      info.textContent = `Udział na osobę: ${fmt(share)} • osób: ${n + 1} (Ty + ${n}) • zbierzesz ${fmt(share * n)}`;
+    } else info.textContent = '';
+  };
+  document.getElementById('split-total').addEventListener('input', recalc);
+  document.querySelectorAll('.split-pick').forEach(c => c.addEventListener('change', recalc));
+  document.getElementById('split-go').addEventListener('click', async () => {
+    const ids = [...document.querySelectorAll('.split-pick:checked')].map(c => c.value);
+    const total = parseFloat(document.getElementById('split-total').value);
+    const title = document.getElementById('split-title').value.trim() || 'Split Bill';
+    if (!ids.length) return toast('Zaznacz osoby', 'bad');
+    if (!total || total <= 0) return toast('Podaj kwotę', 'bad');
+    const share = Math.round(total / (ids.length + 1) * 100) / 100;
+    let collected = 0; const failed = [];
+    for (const id of ids) {
+      const p = Store.state().users[id];
+      const charge = Store.applyCharge(p, share);
+      if (!charge) { failed.push(p.name); continue; }
+      await Store.updateUser(p.id, charge);
+      await Store.pushTx(p.id, mkTx('out', `Split: ${title} (udział dla ${u.name})`, share));
+      collected += share;
+    }
+    if (collected > 0) {
+      await Store.updateUser(u.id, Store.applyCredit(currentUser(), collected));
+      await Store.pushTx(u.id, mkTx('in', `Split: ${title} (${ids.length - failed.length} osób)`, collected));
+    }
+    track('split_bill', { total, people: ids.length });
+    toast(`Zebrano ${fmt(collected)}${failed.length ? ' • bez środków: ' + failed.join(', ') : ''}`, failed.length ? 'bad' : 'good');
     celebrate();
     navTo('pay');
   });
@@ -909,6 +968,7 @@ function viewMore(u) {
     <div class="greeting-sub">Wszystkie funkcje TF CARD</div>
     <div class="card" style="padding:6px 12px">
       ${item('qr', '📷', 'Płatność QR', 'zapłać/odbierz kodem')}
+      ${item('split', '🧾', 'Podziel rachunek', 'split bill ze znajomymi')}
       ${item('subs', '⭐', 'Subskrypcje', 'PLUS i PRO')}
       ${item('savings', '🏦', 'Skarbonka', `${fmt(u.savings)} odłożone`)}
       ${item('teo', '💎', 'TEOpoints', `${num(u.teo)} punktów`)}
