@@ -244,6 +244,7 @@ function showStorageMode() {
 /* Reakcja na każdą zmianę danych (również z innego telefonu / od admina) */
 function onState() {
   if (session && session.type === 'user' && !currentUser()) { doLogout(); return; }
+  if (session && session.type === 'user' && currentUser().locked) { toast('Konto zablokowane przez administratora', 'bad'); doLogout(); return; }
   if (session && session.type === 'user') { showApp(); routeRender(); checkBirthday(); checkDebt(); checkMonthlyFee(); }
   else if (session && session.type === 'admin') { showAdmin(); renderAdmin(); }
   else if (!localStorage.getItem(LANDING_KEY)) showLanding();
@@ -327,6 +328,7 @@ function tryMatch() {
   }
   const user = Store.users().find(u => u.pin === pinBuf);
   if (!user) return false;
+  if (user.locked) { pinFail('Konto zablokowane przez administratora'); return true; }
   session = { type: 'user', id: user.id }; saveSession();
   document.getElementById('pin-error').textContent = '';
   activeView = 'home'; showApp(); routeRender();
@@ -1065,6 +1067,7 @@ function renderAdmin() {
       <div class="admin-user-top">
         <div>
           <div class="admin-user-name">${esc(u.name)}
+            ${u.locked ? '<span class="badge" style="background:rgba(255,93,122,.18);color:var(--bad)">🔒 ZABLOKOWANE</span>' : ''}
             ${u.isAdminAcct ? '<span class="badge gold">TY (ADMIN)</span>' : ''}
             ${hasSub(u, 'plus') ? '<span class="badge cyan">PLUS</span>' : ''}
             ${hasSub(u, 'pro') ? '<span class="badge gold">PRO</span>' : ''}
@@ -1123,6 +1126,7 @@ function renderAdmin() {
       </div>
       <div class="admin-actions">
         <button class="btn ${u.cafeAccess ? 'btn-good' : 'btn-ghost'} btn-sm" data-adm="cafe">☕ Cafe: ${u.cafeAccess ? 'TAK' : 'NIE'}</button>
+        <button class="btn ${u.locked ? 'btn-good' : 'btn-danger'} btn-sm" data-adm="lock">${u.locked ? '🔓 Odblokuj konto' : '🔒 Zablokuj konto'}</button>
         <button class="btn btn-ghost btn-sm" data-adm="view">Podgląd</button>
         <button class="btn btn-danger btn-sm" data-adm="delete">Usuń konto</button>
       </div>
@@ -1400,6 +1404,9 @@ function wireAdmin() {
       const m = wrap.querySelector('.adm-msg').value.trim();
       await Store.updateUser(u.id, { message: m });
       toast(m ? `Wysłano wiadomość: ${u.name}` : `Wyczyszczono wiadomość: ${u.name}`, 'good');
+    } else if (action === 'lock') {
+      await Store.updateUser(u.id, { locked: !u.locked });
+      toast(u.locked ? `Odblokowano konto: ${u.name}` : `Zablokowano konto: ${u.name}`, 'good');
     } else if (action === 'cafe') {
       await Store.updateUser(u.id, { cafeAccess: !u.cafeAccess });
       toast(u.cafeAccess ? `Zabrano dostęp Cafe: ${u.name}` : `Nadano dostęp Cafe: ${u.name}`, 'good');
