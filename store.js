@@ -169,7 +169,7 @@ const Store = {
   /* Debet (overdraft) zależny od planu: PLUS 20 zł, PRO 35 zł */
   overdraftLimit(u) {
     if (!u || !u.subs) return 0;
-    if (u.subs.pro) return 35;
+    if (u.subs.pro) return 40;
     if (u.subs.plus) return 20;
     return 0;
   },

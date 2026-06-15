@@ -15,7 +15,7 @@ const PLANS = {
   plus: { id: 'plus', name: 'TF CARD PLUS', tier: 'PLUS', price: 14.99, color: 'plus',
     features: ['Debet do 20 zł', 'Zniżka 10% w TFKF Cafe', 'Prezent urodzinowy: 100 💎 + 25 zł', 'Niebieski akcent konta', 'Wsparcie priorytetowe'] },
   pro: { id: 'pro', name: 'TF CARD PRO', tier: 'PRO', price: 39.99, color: 'pro',
-    features: ['Debet do 35 zł', 'Zniżka 25% w TFKF Cafe', 'Prezent urodzinowy: 250 💎 + 100 zł', 'Złoty wygląd konta ✨', 'Doradca 24/7'] },
+    features: ['Debet do 40 zł', 'Zniżka 25% w TFKF Cafe', 'Prezent urodzinowy: 250 💎 + 100 zł', 'Złoty wygląd konta ✨', 'Doradca 24/7'] },
 };
 
 /* Perki zależne od planu */
