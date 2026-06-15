@@ -81,6 +81,9 @@ body {
 .lock-brand .brand-name { margin-top: 14px; cursor: pointer; user-select: none; }
 .lock-sub { color: var(--muted); font-size: 14px; margin-top: 8px; }
 .lock-screen.admin .brand-logo { background: linear-gradient(135deg, #e2a33d, #b8761f); box-shadow: 0 8px 24px rgba(244,196,90,.35); }
+/* W trybie admina chowamy duży napis marki — wejście dyskretne */
+.lock-screen.admin .brand-name { display: none; }
+.lock-screen.admin .brand-logo { width: 40px; height: 40px; font-size: 15px; }
 
 .pin-dots { display: flex; gap: 18px; margin: 8px 0 6px; }
 .pin-dots .dot { width: 15px; height: 15px; border-radius: 50%; border: 2px solid var(--muted); transition: background .15s, border-color .15s, transform .12s; }

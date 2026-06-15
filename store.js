@@ -81,11 +81,18 @@ const Store = {
         //  109  brak odpowiedzi / timeout (sieć)
         //  151  odmowa dostępu (reguły Firestore / brak auth)
         //  167  config/SDK lub inny błąd inicjalizacji
+        //  172  usługa chmury niedostępna (unavailable)
+        //  188  przekroczony limit (resource-exhausted / quota)
+        //  193  brak sieci / offline
+        //  199  nieznany błąd
         const msg = (e && (e.code || e.message || '')) + '';
         if (e && e.message === 'timeout') this.errCode = '109';
         else if (/permission-denied|insufficient|PERMISSION/i.test(msg)) this.errCode = authFailed ? '106' : '151';
+        else if (/unavailable/i.test(msg)) this.errCode = '172';
+        else if (/resource-exhausted|quota/i.test(msg)) this.errCode = '188';
+        else if (/network|offline|failed to fetch/i.test(msg) || (typeof navigator !== 'undefined' && navigator.onLine === false)) this.errCode = '193';
         else if (authFailed) this.errCode = '106';
-        else this.errCode = '167';
+        else this.errCode = '199';
         console.warn('Firebase init nieudany (' + this.errCode + '), localStorage:', e);
       }
     }
