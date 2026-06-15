@@ -433,8 +433,9 @@ function txListHTML(txs) {
     const isTeo = t.type === 'teo_in' || t.type === 'teo_out';
     const val = isTeo ? `${t.amount} TEOpoints` : fmt(t.amount);
     const amt = `${isIn ? '+' : '−'}${val}`;
-    return `<div class="tx" data-txrow data-ico="${TX_ICON[t.type] || '•'}" data-title="${esc(t.title)}" data-desc="${esc(t.desc || '')}" data-amt="${esc(amt)}" data-date="${esc(fmtDate(t.ts))}" data-kind="${isIn ? 'in' : 'out'}">
-      <div class="tx-ico">${TX_ICON[t.type] || '•'}</div>
+    const ico = (isTeo && /^MotoRun/i.test(t.title)) ? '🏍️' : (TX_ICON[t.type] || '•');
+    return `<div class="tx" data-txrow data-ico="${ico}" data-title="${esc(t.title)}" data-desc="${esc(t.desc || '')}" data-amt="${esc(amt)}" data-date="${esc(fmtDate(t.ts))}" data-kind="${isIn ? 'in' : 'out'}">
+      <div class="tx-ico">${ico}</div>
       <div class="tx-main"><div class="tx-title">${esc(t.title)}</div><div class="tx-sub">${t.desc ? esc(t.desc) + ' • ' : ''}${fmtDate(t.ts)}</div></div>
       <div class="tx-amt ${isIn ? 'in' : ''}">${amt}</div>
     </div>`;

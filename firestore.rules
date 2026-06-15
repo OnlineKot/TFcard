@@ -1,17 +1,27 @@
 rules_version = '2';
 
-// Reguły bezpieczeństwa TF CARD.
-// Skopiuj do: Firebase → Firestore Database → Rules → Opublikuj.
-// Wymagają zalogowania (anonimowego) — aplikacja loguje użytkownika
-// automatycznie. Trzeba włączyć: Authentication → Sign-in method →
-// Anonymous → Enable.
+// Reguły TF CARD + MotoRun (projekt tf-card).
+// Logowanie: Google / Email+Password (Anonymous wyłączone) -> request.auth != null.
+// Skopiuj do: Firebase -> Firestore Database -> Rules -> Opublikuj.
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Cały stan aplikacji trzymany jest w dokumencie tfcard/state.
+    // Wspólny stan TF CARD (konta, salda, TEOpoints, historia).
+    // Czyta/pisze każdy ZALOGOWANY — potrzebne aplikacji i grze MotoRun
+    // (MotoRun zapisuje users.<uid>.teo oraz transactions przez field-path).
     match /tfcard/{docId} {
-      // Tylko zalogowani (token anonimowy z aplikacji) mogą czytać/pisać.
       allow read, write: if request.auth != null;
+    }
+
+    // Profil gry MotoRun — tylko właściciel (uid = Firebase Auth uid).
+    match /players/{uid} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+    }
+
+    // Wyniki MotoRun — ranking czytelny publicznie, zapis tylko właściciel.
+    match /motorun_scores/{uid} {
+      allow read: if true;
+      allow write: if request.auth != null && request.auth.uid == uid;
     }
 
     // Wszystko inne — zablokowane.
