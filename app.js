@@ -206,13 +206,12 @@ function showLanding() {
 function showStorageMode() {
   const el = document.getElementById('storage-mode');
   if (Store.backend === 'firebase') { el.textContent = '🔒 Połączono z chmurą'; return; }
-  const code = Store.errCode || 'TF-INIT-05';
+  const code = Store.errCode || '167';
   const msg = {
-    'TF-AUTH-01': 'Nie można zalogować do chmury — dane zapisują się tylko na tym urządzeniu.',
-    'TF-NET-02': 'Brak połączenia z internetem — pracujesz offline, dane na tym urządzeniu.',
-    'TF-RULE-03': 'Synchronizacja chwilowo niedostępna — dane na tym urządzeniu.',
-    'TF-CFG-04': 'Usługa chwilowo niedostępna — dane na tym urządzeniu.',
-    'TF-INIT-05': 'Błąd synchronizacji online — dane zapisują się na tym urządzeniu.',
+    '106': 'Nie można zalogować do chmury — dane zapisują się tylko na tym urządzeniu.',
+    '109': 'Brak połączenia z internetem — pracujesz offline, dane na tym urządzeniu.',
+    '151': 'Synchronizacja chwilowo niedostępna — dane na tym urządzeniu.',
+    '167': 'Błąd synchronizacji online — dane zapisują się na tym urządzeniu.',
   }[code] || 'Błąd synchronizacji online — dane na tym urządzeniu.';
   el.textContent = `⚠️ ${msg} (kod ${code})`;
 }

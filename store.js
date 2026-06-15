@@ -52,7 +52,7 @@ const Store = {
   async init() {
     const cfg = window.FIREBASE_CONFIG;
     if (!configReady(cfg) || !window.firebase || !firebase.firestore) {
-      this.errCode = 'TF-CFG-04'; // brak/niepełny config lub SDK
+      this.errCode = '167'; // brak/niepełny config lub SDK
     } else {
       let authFailed = false;
       try {
@@ -77,16 +77,15 @@ const Store = {
         return;
       } catch (e) {
         // Kody błędów synchronizacji (zapamiętane):
-        //  TF-AUTH-01  logowanie nieudane (np. Anonymous wyłączone)
-        //  TF-NET-02   brak odpowiedzi / timeout (sieć)
-        //  TF-RULE-03  odmowa dostępu (reguły Firestore / brak auth)
-        //  TF-CFG-04   brak/niepełny config lub SDK
-        //  TF-INIT-05  inny błąd inicjalizacji Firebase
+        //  106  logowanie nieudane (np. Anonymous wyłączone)
+        //  109  brak odpowiedzi / timeout (sieć)
+        //  151  odmowa dostępu (reguły Firestore / brak auth)
+        //  167  config/SDK lub inny błąd inicjalizacji
         const msg = (e && (e.code || e.message || '')) + '';
-        if (e && e.message === 'timeout') this.errCode = 'TF-NET-02';
-        else if (/permission-denied|insufficient|PERMISSION/i.test(msg)) this.errCode = authFailed ? 'TF-AUTH-01' : 'TF-RULE-03';
-        else if (authFailed) this.errCode = 'TF-AUTH-01';
-        else this.errCode = 'TF-INIT-05';
+        if (e && e.message === 'timeout') this.errCode = '109';
+        else if (/permission-denied|insufficient|PERMISSION/i.test(msg)) this.errCode = authFailed ? '106' : '151';
+        else if (authFailed) this.errCode = '106';
+        else this.errCode = '167';
         console.warn('Firebase init nieudany (' + this.errCode + '), localStorage:', e);
       }
     }
