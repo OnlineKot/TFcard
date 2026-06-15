@@ -1115,15 +1115,11 @@ function renderAdmin() {
       <a class="btn btn-ghost" href="tfkfcafe/" style="text-decoration:none">☕ TFKF Cafe</a>
     </div>
     ${Store.backend !== 'firebase' ? `
-    <div class="card" style="border-color:var(--gold);margin-bottom:14px">
-      <b>⚠️ Dokończ konfigurację Firebase</b>
-      <div class="muted" style="font-size:13px;margin-top:6px">Teraz dane są tylko na tym telefonie. Aby działały na wielu:</div>
-      <ol style="margin:8px 0 0 18px;font-size:13px;line-height:1.6">
-        <li>Firebase → <b>Databases &amp; Storage</b> → Firestore → <b>Create database</b> (region eur3, tryb testowy)</li>
-        <li>Firebase → <b>Security</b> → Authentication → <b>Anonymous</b> → Enable</li>
-      </ol>
+    <div class="card" style="border-color:var(--bad);margin-bottom:14px">
+      <b>⚠️ Brak synchronizacji online</b>
+      <div class="muted" style="font-size:13px;margin-top:6px">Dane zapisują się tylko na tym urządzeniu (kod ${Store.errCode || '167'}).</div>
     </div>` : `
-    <div class="card" style="border-color:var(--good);margin-bottom:14px">🔒 Firebase połączony — sync na wielu telefonach działa.</div>`}
+    <div class="card" style="border-color:var(--good);margin-bottom:14px">🔒 Połączono z chmurą — sync na wielu telefonach.</div>`}
     <div class="stat-row">
       <div class="stat"><div class="stat-val">${users.length}</div><div class="stat-label">Konta</div></div>
       <div class="stat"><div class="stat-val">${subs}</div><div class="stat-label">Subskrypcje</div></div>
