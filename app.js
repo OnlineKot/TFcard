@@ -183,6 +183,7 @@ async function init() {
   // Natychmiastowy pierwszy ekran — nie czekamy na Firebase
   if (!session && !localStorage.getItem(LANDING_KEY)) showLanding();
   else if (!session) showLock();
+  hideBoot();
   await Store.init();
   initAnalytics();
   Store.subscribe(onState);
@@ -196,6 +197,12 @@ function setupLanding() {
     localStorage.setItem(LANDING_KEY, '1');
     showLock();
   });
+}
+function hideBoot() {
+  const b = document.getElementById('boot');
+  if (!b) return;
+  b.style.opacity = '0'; b.style.pointerEvents = 'none';
+  setTimeout(() => b.remove(), 400);
 }
 function showLanding() {
   document.getElementById('landing-screen').classList.remove('hidden');
