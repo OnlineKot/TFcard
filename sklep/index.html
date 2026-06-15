@@ -210,7 +210,7 @@
       if (customer.id === s.id) return toast('To Twoje konto', 'bad');
       if (customer.frozen) return toast('Klient ma zablokowane płatności', 'bad');
       const charge = Store.applyCharge(customer, total);
-      if (!charge) return toast('Klient ma za mało środków (limit debetu)', 'bad');
+      if (!charge) return toast(num(customer.debt) > 0 ? 'Klient ma dług — nie może płacić' : 'Klient ma za mało środków', 'bad');
       const items = products().filter(p => cart[p.id]).map(p => `${p.name}×${cart[p.id]}`).join(', ');
       await Store.updateUser(customer.id, charge);
       await Store.pushTx(customer.id, { type: 'out', title: `Sklep ${s.name}: ${items}`, amount: total, ts: Date.now() });

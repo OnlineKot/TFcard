@@ -58,23 +58,25 @@ const Store = {
       let authFailed = false;
       try {
         if (!firebase.apps.length) firebase.initializeApp(cfg);
-        // Timeout, żeby UI nie wisiało gdy Firebase nie odpowiada (5 s)
+        // Timeout, żeby UI nie wisiało gdy Firebase nie odpowiada (8 s)
         const withTimeout = (p, ms) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), ms))]);
-        // Logowanie anonimowe — reguły Firestore wymagają auth
-        if (firebase.auth) {
-          try { await withTimeout(firebase.auth().signInAnonymously(), 5000); }
-          catch (e) { authFailed = true; console.warn('Logowanie nieudane:', e); }
-        }
         this._db = firebase.firestore();
         this._docRef = this._db.collection('tfcard').doc('state');
-        const snap = await withTimeout(this._docRef.get(), 5000);
+        // Samonaprawiający się nasłuch: gdy sieć w końcu odpowie, przełącza na chmurę
+        this._docRef.onSnapshot((s) => {
+          if (s && s.exists && s.data() && s.data().users) {
+            this._state = s.data(); this.backend = 'firebase'; this.errCode = ''; this._emit();
+          }
+        }, (err) => { console.warn('Nasłuch Firestore błąd:', err); });
+        // Logowanie anonimowe — reguły Firestore wymagają auth (nie blokuje na stałe)
+        if (firebase.auth) {
+          try { await withTimeout(firebase.auth().signInAnonymously(), 8000); }
+          catch (e) { authFailed = true; console.warn('Logowanie nieudane:', e); }
+        }
+        const snap = await withTimeout(this._docRef.get(), 8000);
         if (!snap.exists || !snap.data().users) await this._docRef.set(seedState());
         this.backend = 'firebase';
         this.errCode = '';
-        this._docRef.onSnapshot((s) => {
-          this._state = s.data() || { users: {}, meta: {} };
-          this._emit();
-        });
         return;
       } catch (e) {
         // Kody błędów synchronizacji (zapamiętane):
@@ -174,12 +176,11 @@ const Store = {
   /* Zwraca patch {balance[,debt]} po obciążeniu kwotą (z uwzgl. debetu) lub null gdy za mało */
   applyCharge(u, amount) {
     const bal = Number(u.balance) || 0, debt = Number(u.debt) || 0;
-    const limit = this.overdraftLimit(u);
-    if (amount > bal + (limit - debt)) return null;
+    if (debt > 0) return null;                       // masz dług — nie możesz płacić aż spłacisz
     if (amount <= bal) return { balance: bal - amount };
-    const patch = { balance: 0, debt: debt + (amount - bal) }; // brakującą część dopisz do długu
-    if (debt === 0) patch.debtSince = Date.now(); // start liczenia 31 dni
-    return patch;
+    const short = amount - bal;                      // brak środków → dług z różnicy
+    if (short > this.overdraftLimit(u)) return null; // ponad limit debetu planu
+    return { balance: 0, debt: short, debtSince: Date.now() };
   },
   /* Wpływ środków: najpierw spłaca dług, reszta na saldo (łączy dług z zapłatą) */
   applyCredit(u, amount) {

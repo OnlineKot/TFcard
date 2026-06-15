@@ -243,6 +243,7 @@ function showStorageMode() {
 
 /* Reakcja na każdą zmianę danych (również z innego telefonu / od admina) */
 function onState() {
+  showStorageMode(); // odśwież status połączenia (także po samonaprawie sieci)
   if (session && session.type === 'user' && !currentUser()) { doLogout(); return; }
   if (session && session.type === 'user' && currentUser().locked) { toast('Konto zablokowane przez administratora', 'bad'); doLogout(); return; }
   if (session && session.type === 'user') { showApp(); routeRender(); checkBirthday(); checkDebt(); checkMonthlyFee(); }
@@ -577,7 +578,7 @@ function wirePay(u) {
     const recipient = Store.state().users[toId];
     if (!recipient) return toast('Nie znaleziono odbiorcy', 'bad');
     const charge = Store.applyCharge(u, amount);
-    if (!charge) return toast('Niewystarczające środki (limit debetu wykorzystany)', 'bad');
+    if (!charge) return toast(num(u.debt) > 0 ? 'Masz dług — najpierw go spłać' : 'Niewystarczające środki', 'bad');
 
     await Store.updateUser(u.id, charge);
     await Store.pushTx(u.id, mkTx('out', `Przelew do ${recipient.name}: ${title}`, amount));
@@ -702,7 +703,7 @@ function wireQr(u) {
     const recipient = Store.state().users[toId];
     if (!recipient) return toast('Nie znaleziono odbiorcy', 'bad');
     const charge = Store.applyCharge(u, amount);
-    if (!charge) return toast('Niewystarczające środki (limit debetu wykorzystany)', 'bad');
+    if (!charge) return toast(num(u.debt) > 0 ? 'Masz dług — najpierw go spłać' : 'Niewystarczające środki', 'bad');
 
     await Store.updateUser(u.id, charge);
     await Store.pushTx(u.id, mkTx('out', `Płatność QR do ${recipient.name}`, amount));
