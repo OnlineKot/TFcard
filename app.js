@@ -1447,13 +1447,6 @@ function registerSW() {
     // SWR daje błyskawiczny start z cache; nowa wersja wchodzi przez nowy SW,
     // a strona odświeża się raz automatycznie, gdy przejmie nad nią kontrolę.
     navigator.serviceWorker.register('sw.js').then((reg) => { reg.update(); }).catch(() => {});
-    // Odśwież tylko przy AKTUALIZACJI (gdy już istniał kontroler), nie przy 1. instalacji
-    if (navigator.serviceWorker.controller) {
-      let reloaded = false;
-      navigator.serviceWorker.addEventListener('controllerchange', () => {
-        if (reloaded) return; reloaded = true; window.location.reload();
-      });
-    }
   });
 }
 
