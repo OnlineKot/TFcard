@@ -24,7 +24,8 @@ const CAFE_FACTOR = { standard: 1, plus: 0.90, pro: 0.75 }; // zniżka w Cafe
 function cafeFactor(u) { return CAFE_FACTOR[(u.subs && u.subs.pro) ? 'pro' : (u.subs && u.subs.plus) ? 'plus' : 'standard']; }
 
 /* ---------- stan sesji ---------- */
-let session = JSON.parse(localStorage.getItem(SESSION_KEY) || 'null'); // {type:'user',id} | {type:'admin'}
+let session = null;
+try { session = JSON.parse(localStorage.getItem(SESSION_KEY) || 'null'); } catch (e) { session = null; } // {type:'user',id} | {type:'admin'}
 let activeView = 'home';
 let pinMode = 'user';   // 'user' | 'admin'
 let pinBuf = '';
@@ -175,20 +176,29 @@ function track(event, params) {
 }
 
 async function init() {
-  registerSW();
-  setupKeypad();
-  setupNav();
-  setupLanding();
-  setupTxModal();
+  // Każdy krok osobno — błąd jednego nie może zostawić czarnego ekranu
+  try { registerSW(); } catch (e) { console.warn(e); }
+  try { setupKeypad(); } catch (e) { console.warn(e); }
+  try { setupNav(); } catch (e) { console.warn(e); }
+  try { setupLanding(); } catch (e) { console.warn(e); }
+  try { setupTxModal(); } catch (e) { console.warn(e); }
   // Natychmiastowy pierwszy ekran — nie czekamy na Firebase
-  if (!session && !localStorage.getItem(LANDING_KEY)) showLanding();
-  else if (!session) showLock();
+  try {
+    if (!session && !localStorage.getItem(LANDING_KEY)) showLanding();
+    else if (session && session.type === 'admin') showLock();
+    else showLock();
+  } catch (e) { console.warn(e); }
   hideBoot();
-  await Store.init();
-  initAnalytics();
-  Store.subscribe(onState);
-  showStorageMode();
-  track('app_open', { backend: Store.backend });
+  try {
+    await Store.init();
+    initAnalytics();
+    Store.subscribe(onState);
+    showStorageMode();
+    track('app_open', { backend: Store.backend });
+  } catch (e) {
+    console.warn('Init store błąd:', e);
+    try { showLock(); } catch (_) { /* ostatecznie i tak coś pokażemy */ }
+  }
 }
 
 const LANDING_KEY = 'tfcard_seen_landing';
@@ -227,13 +237,18 @@ function showStorageMode() {
 
 /* Reakcja na każdą zmianę danych (również z innego telefonu / od admina) */
 function onState() {
-  showStorageMode(); // odśwież status połączenia (także po samonaprawie sieci)
-  if (session && session.type === 'user' && !currentUser()) { doLogout(); return; }
-  if (session && session.type === 'user' && currentUser().locked) { toast('Konto zablokowane przez administratora', 'bad'); doLogout(); return; }
-  if (session && session.type === 'user') { showApp(); routeRender(); checkBirthday(); checkDebt(); }
-  else if (session && session.type === 'admin') { showAdmin(); renderAdmin(); }
-  else if (!localStorage.getItem(LANDING_KEY)) showLanding();
-  else showLock();
+  try {
+    showStorageMode(); // odśwież status połączenia (także po samonaprawie sieci)
+    if (session && session.type === 'user' && !currentUser()) { doLogout(); return; }
+    if (session && session.type === 'user' && currentUser().locked) { toast('Konto zablokowane przez administratora', 'bad'); doLogout(); return; }
+    if (session && session.type === 'user') { showApp(); routeRender(); checkBirthday(); checkDebt(); }
+    else if (session && session.type === 'admin') { showAdmin(); renderAdmin(); }
+    else if (!localStorage.getItem(LANDING_KEY)) showLanding();
+    else showLock();
+  } catch (e) {
+    console.warn('onState błąd:', e);
+    try { showLock(); } catch (_) {}
+  }
 }
 
 /* =========================================================================
