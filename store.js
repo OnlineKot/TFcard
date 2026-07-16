@@ -75,7 +75,9 @@ const Store = {
           catch (e) { authFailed = true; console.warn('Logowanie nieudane:', e); }
         }
         const snap = await withTimeout(this._docRef.get(), 8000);
-        if (!snap.exists || !snap.data().users) await this._docRef.set(seedState());
+        // Sadź dane TYLKO gdy dokument NAPRAWDĘ nie istnieje — nigdy nie nadpisuj istniejącej bazy
+        if (!snap.exists) { await this._docRef.set(seedState()); }
+        else if (snap.data() && !snap.data().meta) { await this._docRef.set({ meta: { adminPin: '', vending: [], cafe: [], shop: [], tickets: [], teoshop: [], announce: '' } }, { merge: true }); }
         this.backend = 'firebase';
         this.errCode = '';
         return;
