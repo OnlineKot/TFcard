@@ -60,8 +60,8 @@ const Store = {
         // Timeout, żeby UI nie wisiało gdy Firebase nie odpowiada (8 s)
         const withTimeout = (p, ms) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), ms))]);
         this._db = firebase.firestore();
-        // iOS/Safari + restrykcyjne sieci: WebChannel bywa blokowany → long-polling
-        try { this._db.settings({ experimentalAutoDetectLongPolling: true, merge: true }); } catch (e) { /* ustawienia już zastosowane */ }
+        // iOS/Safari + restrykcyjne sieci: WebChannel się zawiesza → WYMUSZAMY long-polling
+        try { this._db.settings({ experimentalForceLongPolling: true }); } catch (e) { console.warn('settings:', e); }
         this._docRef = this._db.collection('tfcard').doc('state');
         // Samonaprawiający się nasłuch: gdy sieć w końcu odpowie, przełącza na chmurę
         this._docRef.onSnapshot((s) => {
