@@ -34,7 +34,7 @@ function blankUser(name, pin, opts = {}) {
 function seedState() {
   // PIN administratora NIE jest zapisany w kodzie — ustawia się go przy
   // pierwszym wejściu w tryb admina (i można zmienić w panelu).
-  return { users: {}, meta: { adminPin: '', vending: [], cafe: [], shop: [], tickets: [], announce: '' } };
+  return { users: {}, meta: { adminPin: '', vending: [], cafe: [], shop: [], tickets: [], teoshop: [], announce: '' } };
 }
 
 function configReady(cfg) {

@@ -366,7 +366,7 @@ function showApp() {
 }
 
 /* Podświetlenie w dolnej nawigacji dla widoków podrzędnych (np. „Więcej") */
-const NAV_FOR = { home: 'home', pay: 'pay', qr: 'pay', split: 'pay', teo: 'teo', more: 'more', subs: 'more', savings: 'more', profile: 'more', stats: 'more', debt: 'more' };
+const NAV_FOR = { home: 'home', pay: 'pay', qr: 'pay', split: 'pay', teo: 'teo', teoshop: 'teo', more: 'more', subs: 'more', savings: 'more', profile: 'more', stats: 'more', debt: 'more' };
 
 function navTo(view) {
   activeView = view;
@@ -397,7 +397,7 @@ function render() {
   if (t === 'pro') app.classList.add('tier-pro'); else if (t === 'plus') app.classList.add('tier-plus');
   const views = {
     home: viewHome, pay: viewPay, subs: viewSubs,
-    teo: viewTeo, more: viewMore, savings: viewSavings,
+    teo: viewTeo, teoshop: viewTeoShop, more: viewMore, savings: viewSavings,
     profile: viewProfile, stats: viewStats, debt: viewDebt, qr: viewQr, split: viewSplit,
   };
   const c = document.getElementById('view-container');
@@ -410,7 +410,7 @@ function render() {
   }
   const wires = {
     home: wireHome, pay: wirePay, subs: wireSubs,
-    teo: wireTeo, more: wireMore, savings: wireSavings,
+    teo: wireTeo, teoshop: wireTeoShop, more: wireMore, savings: wireSavings,
     profile: wireProfile, debt: wireDebt, qr: wireQr, split: wireSplit,
   };
   if (wires[activeView]) wires[activeView](u);
@@ -803,12 +803,52 @@ function viewTeo(u) {
       <div><div class="bankcard-balance-label">Twoje punkty</div><div class="bankcard-balance">${num(u.teo)} 💎</div></div>
       <div class="bankcard-bottom"><span>${esc(u.name.toUpperCase())}</span><span>TF&nbsp;LOYALTY</span></div>
     </div>
+    <div class="actions-row">
+      <div class="action" data-go="teoshop"><div class="circle">🛍️</div><span>Sklep TEO</span></div>
+      <div class="action" data-go="home"><div class="circle">🏠</div><span>Pulpit</span></div>
+    </div>
     <p class="center muted" style="font-size:12px;margin-top:6px">Punkty TEOpoints przyznaje wyłącznie administrator.</p>
     <div class="section-title">Historia punktów</div>
     <div class="card">${txListHTML(history)}</div>`;
 }
 function wireTeo() {
   document.querySelectorAll('[data-go]').forEach(el => el.addEventListener('click', () => navTo(el.dataset.go)));
+}
+
+/* ---------- Sklep TEOpoints (użytkownik kupuje za punkty) ---------- */
+function viewTeoShop(u) {
+  const items = Store.meta().teoshop || [];
+  const purchases = txArr(u).filter(t => t.type === 'teo_out');
+  const grid = items.length ? `<div class="tile-row" style="grid-template-columns:repeat(2,1fr)">
+    ${items.map(p => `
+      <div class="card" style="text-align:center;display:flex;flex-direction:column;gap:6px">
+        <div style="font-size:38px">${esc(p.icon || '🛍️')}</div>
+        <div style="font-weight:600;font-size:14px">${esc(p.name)}</div>
+        <div class="muted" style="font-size:13px">${num(p.cost)} 💎</div>
+        <button class="btn btn-primary btn-sm" data-buy="${p.id}" ${num(u.teo) < num(p.cost) ? 'disabled' : ''}>Kup</button>
+      </div>`).join('')}
+  </div>` : '<div class="card"><div class="empty">Sklep pusty — admin doda produkty</div></div>';
+  const bought = purchases.length ? `<div class="tx-list">${purchases.slice(0, 12).map(t => `
+    <div class="tx"><div class="tx-ico">🛍️</div>
+      <div class="tx-main"><div class="tx-title">${esc(t.title)}</div><div class="tx-sub">${fmtDate(t.ts)}</div></div>
+      <div class="tx-amt">${t.amount} 💎</div></div>`).join('')}</div>` : '<div class="empty">Nic jeszcze nie kupiono</div>';
+  return `
+    <div class="greeting">Sklep TEOpoints 🛍️</div>
+    <div class="greeting-sub">Masz: <b>${num(u.teo)} 💎</b></div>
+    ${grid}
+    <div class="section-title">Twoje zakupy</div>
+    <div class="card">${bought}</div>`;
+}
+function wireTeoShop(u) {
+  document.querySelectorAll('[data-buy]').forEach(b => b.addEventListener('click', async () => {
+    const p = (Store.meta().teoshop || []).find(x => x.id === b.dataset.buy);
+    if (!p) return;
+    if (num(u.teo) < num(p.cost)) return toast('Za mało TEOpoints', 'bad');
+    await Store.updateUser(u.id, { teo: num(u.teo) - num(p.cost) });
+    await Store.pushTx(u.id, mkTx('teo_out', `Sklep: ${p.name}`, num(p.cost)));
+    track('teoshop_buy', { item: p.id });
+    toast(`Kupiono: ${p.name} 🎉`, 'good'); celebrate(); render();
+  }));
 }
 
 /* ---------- Skarbonka + TF Goal (cel oszczędnościowy z postępem) ---------- */
@@ -1032,6 +1072,7 @@ function viewMore(u) {
       ${item('subs', '⭐', 'Subskrypcje', 'PLUS i PRO')}
       ${item('savings', '🏦', 'Skarbonka', `${fmt(u.savings)} odłożone`)}
       ${item('teo', '💎', 'TEOpoints', `${num(u.teo)} punktów`)}
+      ${item('teoshop', '🛍️', 'Sklep TEOpoints', 'kup za punkty')}
       ${item('debt', '📉', 'Dług', num(u.debt) > 0 ? fmt(u.debt) + ' do spłaty' : 'brak')}
       ${item('stats', '📊', 'Statystyki', 'podsumowanie konta')}
       ${item('profile', '👤', 'Profil', u.frozen ? 'płatności zablokowane' : 'dane, PIN, blokada')}
@@ -1227,6 +1268,24 @@ function renderAdmin() {
         : '<div class="empty">Brak produktów — dodaj powyżej</div>'}
     </div>
 
+    <div class="section-title">Sklep TEOpoints 🛍️💎</div>
+    <div class="card">
+      <div class="admin-actions" style="margin:0 0 10px">
+        <input type="text" id="teoshop-emoji" maxlength="2" placeholder="🛍️" style="max-width:60px;text-align:center" />
+        <input type="text" id="teoshop-name" placeholder="Nazwa produktu" style="max-width:160px" />
+        <input type="number" id="teoshop-cost" min="1" step="1" placeholder="Koszt 💎" style="max-width:90px" />
+        <button class="btn btn-good btn-sm" id="teoshop-add">Dodaj</button>
+      </div>
+      ${(Store.meta().teoshop || []).length
+        ? `<div class="tx-list">` + (Store.meta().teoshop || []).map(p => `
+            <div class="tx">
+              <div class="tx-ico">${esc(p.icon || '🛍️')}</div>
+              <div class="tx-main"><div class="tx-title">${esc(p.name)}</div><div class="tx-sub">${num(p.cost)} 💎</div></div>
+              <button class="btn btn-danger btn-sm" data-teoshop-del="${p.id}">Usuń</button>
+            </div>`).join('') + `</div>`
+        : '<div class="empty">Brak produktów — dodaj powyżej</div>'}
+    </div>
+
     <div class="section-title">Użytkownicy (${users.length})</div>
     ${users.length ? '<input type="text" id="admin-search" class="admin-search" placeholder="🔎 Szukaj po imieniu…" />' : ''}
     <div id="admin-users">${usersHTML || '<div class="empty">Brak kont — utwórz w Kreatorze kont</div>'}</div>`;
@@ -1307,6 +1366,24 @@ function wireAdmin() {
   document.querySelectorAll('[data-vend-del]').forEach(b => b.addEventListener('click', async () => {
     const list = (Store.meta().vending || []).filter(p => p.id !== b.dataset.vendDel);
     await Store.setMeta({ vending: list });
+    toast('Usunięto produkt'); renderAdmin();
+  }));
+
+  // Sklep TEOpoints — produkty
+  document.getElementById('teoshop-add').addEventListener('click', async () => {
+    const name = document.getElementById('teoshop-name').value.trim();
+    const cost = parseInt(document.getElementById('teoshop-cost').value, 10);
+    const icon = document.getElementById('teoshop-emoji').value.trim() || '🛍️';
+    if (!name) return toast('Podaj nazwę produktu', 'bad');
+    if (!cost || cost <= 0) return toast('Podaj koszt w punktach', 'bad');
+    const list = (Store.meta().teoshop || []).slice();
+    list.push({ id: 'ts-' + Math.random().toString(36).slice(2, 8), name, cost, icon });
+    await Store.setMeta({ teoshop: list });
+    toast(`Dodano do sklepu TEO: ${name}`, 'good'); renderAdmin();
+  });
+  document.querySelectorAll('[data-teoshop-del]').forEach(b => b.addEventListener('click', async () => {
+    const list = (Store.meta().teoshop || []).filter(p => p.id !== b.dataset.teoshopDel);
+    await Store.setMeta({ teoshop: list });
     toast('Usunięto produkt'); renderAdmin();
   }));
 
