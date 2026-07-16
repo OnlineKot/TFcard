@@ -48,6 +48,7 @@ const Store = {
   _state: { users: {}, meta: {} },
   _subs: [],
   errCode: '',
+  _synced: false,
 
   async init() {
     const cfg = window.FIREBASE_CONFIG;
@@ -66,7 +67,7 @@ const Store = {
         // Samonaprawiający się nasłuch: gdy sieć w końcu odpowie, przełącza na chmurę
         this._docRef.onSnapshot((s) => {
           if (s && s.exists && s.data() && s.data().users) {
-            this._state = s.data(); this.backend = 'firebase'; this.errCode = ''; this._emit();
+            this._state = s.data(); this.backend = 'firebase'; this.errCode = ''; this._synced = true; this._emit();
           }
         }, (err) => { console.warn('Nasłuch Firestore błąd:', err); });
         // Logowanie anonimowe — reguły Firestore wymagają auth (nie blokuje na stałe)
@@ -126,6 +127,8 @@ const Store = {
   },
   _commit() {
     if (this.backend === 'firebase') {
+      // NIGDY nie nadpisuj chmury pustką, zanim wczytamy istniejące dane
+      if (!this._synced && Object.keys(this._state.users || {}).length === 0) return Promise.resolve();
       // Stabilność: błąd zapisu nie wywala aplikacji; snapshot skoryguje stan
       return this._docRef.set(this._state).catch((e) => { console.warn('Zapis do chmury nieudany:', e); });
     }
