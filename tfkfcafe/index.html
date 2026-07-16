@@ -157,10 +157,11 @@
       const p = cafeProducts().find(x => x.id === pid);
       if (!p) return;
       pending = p;
-      if (num(p.cost) === 0) { onCustomer(''); return; } // gratis — wciąż identyfikujemy klienta? nie, wydajemy od razu
-      const code = prompt(`${p.name} — ${num(p.cost)} 💎\n\nWpisz 6-cyfrowy kod lub PIN klienta, albo OK aby zeskanować QR.`);
-      if (code === null) { startScan(onCustomer); return; }
-      onCustomer(code.trim());
+      if (num(p.cost) === 0) { onCustomer(''); return; }
+      // Przyjmowanie płatności przez QR: od razu otwieramy skaner kamery
+      if (window.jsQR && navigator.mediaDevices && navigator.mediaDevices.getUserMedia) { startScan(onCustomer); return; }
+      const code = prompt(`${p.name} — ${num(p.cost)} 💎\n\nWpisz 6-cyfrowy kod lub PIN klienta.`);
+      if (code !== null) onCustomer(code.trim());
     }
 
     async function onCustomer(raw) {

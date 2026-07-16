@@ -456,9 +456,10 @@ function viewHome(u) {
       <div class="action" data-go="more"><div class="circle">⋯</div><span>Więcej</span></div>
     </div>
     <div class="mini-row">
-      <div class="mini"><span>📊 Wydatki w tym mies.</span><b>${fmt(monthSpend(u))}</b></div>
       <div class="mini" data-go="teo"><span>💎 TEOpoints</span><b>${num(u.teo)}</b></div>
+      <div class="mini" data-go="teoshop"><span>🛍️ Sklep TEO</span><b>${(Store.meta().teoshop || []).length} szt.</b></div>
       <div class="mini" data-go="savings"><span>🏦 Skarbonka</span><b>${fmt(u.savings)}</b></div>
+      <div class="mini"><span>📊 Wydatki/mies.</span><b>${fmt(monthSpend(u))}</b></div>
       ${num(u.debt) > 0 ? `<div class="mini debt" data-go="debt"><span>📉 Dług • ${debtDaysLeft(u) <= 0 ? 'spłać dziś' : debtDaysLeft(u) + ' dni'}</span><b>${fmt(u.debt)}</b></div>` : ''}
     </div>
     <div class="section-title">Transakcje</div>
