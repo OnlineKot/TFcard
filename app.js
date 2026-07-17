@@ -1,10 +1,4 @@
-/* =========================================================================
-   TF CARD — logika aplikacji (Revolut-style)
-   • Logowanie PIN-em (klawiatura numeryczna)
-   • Admin: kliknięcie w napis „TF CARD" + PIN administratora
-   • Dane przez Store (Firebase / localStorage)
-   • PWA: service worker + instrukcja instalacji na iPhone
-   ========================================================================= */
+/* TF CARD — kod open source. Nie kopiuj. W tworzeniu pomagał Claude (AI). */
 'use strict';
 
 const SESSION_KEY = 'tfcard_session_v2';

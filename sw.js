@@ -1,11 +1,5 @@
-/* TF CARD — service worker (stabilny cache)
-   Strategia:
-   • pliki aplikacji (HTML/CSS/JS) → network-first: online zawsze świeże,
-     offline z cache (brak „zacięć" na starej wersji)
-   • ikony/obrazki → cache-first (szybko, rzadko się zmieniają)
-   • Firebase / CDN → zawsze sieć (nie cache'ujemy)
-*/
-const CACHE = 'tfcard-v59';
+/* TF CARD — kod open source. Nie kopiuj. W tworzeniu pomagał Claude (AI). */
+const CACHE = 'tfcard-v60';
 const SHELL = [
   './',
   './index.html',

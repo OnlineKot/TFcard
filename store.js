@@ -1,14 +1,4 @@
-/* =========================================================================
-   TF CARD — warstwa danych
-   Dwa backendy z identycznym API:
-     • firebase  — Cloud Firestore, synchronizacja na wielu telefonach
-     • local     — localStorage, awaryjnie zanim Firebase zacznie działać
-   Cały stan trzymany jest w jednym dokumencie:  kolekcja "tfcard" / "state"
-     { users: { <id>: { id,name,pin,balance,
-                        subs:{plus,pro}, req:{plus,pro},
-                        cardNumber,createdAt, transactions:{<txid>:{...}} } },
-       meta:  { adminPin } }
-   ========================================================================= */
+/* TF CARD — kod open source. Nie kopiuj. W tworzeniu pomagał Claude (AI). */
 'use strict';
 
 const LOCAL_KEY = 'tfcard_state_v4';
